@@ -1,0 +1,87 @@
+// ABOUTME: Sample application demonstrating the MLflow Go SDK.
+// ABOUTME: Exercises RegisterPrompt, LoadPrompt, and LoadPrompt with specific version.
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"math/rand/v2"
+	"time"
+
+	"github.com/ederign/mlflow-go/mlflow"
+)
+
+func main() {
+	ctx := context.Background()
+
+	// Create client connecting to local MLflow server
+	client, err := mlflow.NewClient(
+		mlflow.WithTrackingURI("http://localhost:5000"),
+		mlflow.WithInsecure(),
+	)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+
+	fmt.Printf("Connected to MLflow at %s\n\n", client.TrackingURI())
+
+	// Generate a unique prompt name for this run
+	promptName := fmt.Sprintf("sample-prompt-%d", rand.IntN(10000))
+
+	// === Path 1: RegisterPrompt - Create a new prompt ===
+	fmt.Println("=== 1. RegisterPrompt: Creating a new prompt ===")
+	prompt1, err := client.RegisterPrompt(ctx, promptName,
+		"Hello {{name}}, welcome to {{place}}!",
+		mlflow.WithDescription("Initial version of greeting prompt"),
+		mlflow.WithTags(map[string]string{"author": "sample-app", "type": "greeting"}),
+	)
+	if err != nil {
+		log.Fatalf("Failed to register prompt: %v", err)
+	}
+	printPrompt(prompt1)
+
+	// Create a second version to demonstrate versioning
+	fmt.Println("\n=== 1b. RegisterPrompt: Creating version 2 ===")
+	prompt2, err := client.RegisterPrompt(ctx, promptName,
+		"Greetings {{name}}! Welcome to {{place}}. How are you today?",
+		mlflow.WithDescription("More friendly greeting"),
+	)
+	if err != nil {
+		log.Fatalf("Failed to register prompt v2: %v", err)
+	}
+	printPrompt(prompt2)
+
+	// === Path 2: LoadPrompt - Load the latest version ===
+	fmt.Println("\n=== 2. LoadPrompt: Loading latest version ===")
+	latestPrompt, err := client.LoadPrompt(ctx, promptName)
+	if err != nil {
+		log.Fatalf("Failed to load latest prompt: %v", err)
+	}
+	printPrompt(latestPrompt)
+
+	// === Path 3: LoadPrompt with WithVersion - Load specific version ===
+	fmt.Println("\n=== 3. LoadPrompt with WithVersion: Loading version 1 ===")
+	v1Prompt, err := client.LoadPrompt(ctx, promptName, mlflow.WithVersion(1))
+	if err != nil {
+		log.Fatalf("Failed to load prompt version 1: %v", err)
+	}
+	printPrompt(v1Prompt)
+
+	fmt.Println("\n=== All operations completed successfully! ===")
+}
+
+func printPrompt(p *mlflow.Prompt) {
+	fmt.Printf("  Name:        %s\n", p.Name)
+	fmt.Printf("  Version:     %d\n", p.Version)
+	fmt.Printf("  Template:    %s\n", p.Template)
+	fmt.Printf("  Description: %s\n", p.Description)
+	if len(p.Tags) > 0 {
+		fmt.Printf("  Tags:        %v\n", p.Tags)
+	}
+	if !p.CreatedAt.IsZero() {
+		fmt.Printf("  Created:     %s\n", p.CreatedAt.Format(time.RFC3339))
+	}
+}
+
