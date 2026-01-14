@@ -31,3 +31,10 @@ Thumbs.db
 # Build output
 bin/
 dist/
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Speckit
+.specify/
