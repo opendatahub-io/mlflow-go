@@ -294,3 +294,224 @@ func TestLoadPrompt_NotFound(t *testing.T) {
 		t.Errorf("expected IsNotFound, got %v", err)
 	}
 }
+
+func TestRegisterPrompt_NewPrompt(t *testing.T) {
+	var createModelCalled, createVersionCalled bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api/2.0/mlflow/registered-models/create":
+			createModelCalled = true
+			json.NewEncoder(w).Encode(map[string]any{
+				"registered_model": map[string]any{
+					"name": "new-prompt",
+				},
+			})
+		case "/api/2.0/mlflow/model-versions/create":
+			createVersionCalled = true
+			json.NewEncoder(w).Encode(map[string]any{
+				"model_version": map[string]any{
+					"name":                   "new-prompt",
+					"version":                "1",
+					"description":            "First version",
+					"creation_timestamp":     1700000000000,
+					"last_updated_timestamp": 1700000000000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Hello, {{name}}!"},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	prompt, err := client.RegisterPrompt(
+		context.Background(),
+		"new-prompt",
+		"Hello, {{name}}!",
+		WithDescription("First version"),
+	)
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	if !createModelCalled {
+		t.Error("expected registered-models/create to be called")
+	}
+	if !createVersionCalled {
+		t.Error("expected model-versions/create to be called")
+	}
+	if prompt.Name != "new-prompt" {
+		t.Errorf("Name = %q, want %q", prompt.Name, "new-prompt")
+	}
+	if prompt.Version != 1 {
+		t.Errorf("Version = %d, want %d", prompt.Version, 1)
+	}
+	if prompt.Template != "Hello, {{name}}!" {
+		t.Errorf("Template = %q, want %q", prompt.Template, "Hello, {{name}}!")
+	}
+}
+
+func TestRegisterPrompt_ExistingPrompt(t *testing.T) {
+	var createVersionCalled bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api/2.0/mlflow/registered-models/create":
+			// Prompt already exists - return 409
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error_code": "RESOURCE_ALREADY_EXISTS",
+				"message":    "Registered Model 'existing-prompt' already exists",
+			})
+		case "/api/2.0/mlflow/model-versions/create":
+			createVersionCalled = true
+			json.NewEncoder(w).Encode(map[string]any{
+				"model_version": map[string]any{
+					"name":    "existing-prompt",
+					"version": "2",
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Updated template"},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	prompt, err := client.RegisterPrompt(
+		context.Background(),
+		"existing-prompt",
+		"Updated template",
+	)
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	if !createVersionCalled {
+		t.Error("expected model-versions/create to be called")
+	}
+	if prompt.Version != 2 {
+		t.Errorf("Version = %d, want %d", prompt.Version, 2)
+	}
+}
+
+func TestRegisterPrompt_WithTags(t *testing.T) {
+	var receivedTags []map[string]string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api/2.0/mlflow/registered-models/create":
+			json.NewEncoder(w).Encode(map[string]any{
+				"registered_model": map[string]any{"name": "tagged-prompt"},
+			})
+		case "/api/2.0/mlflow/model-versions/create":
+			var req struct {
+				Tags []map[string]string `json:"tags"`
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+			receivedTags = req.Tags
+
+			json.NewEncoder(w).Encode(map[string]any{
+				"model_version": map[string]any{
+					"name":    "tagged-prompt",
+					"version": "1",
+					"tags":    req.Tags,
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.RegisterPrompt(
+		context.Background(),
+		"tagged-prompt",
+		"Template",
+		WithTags(map[string]string{"team": "ml", "env": "prod"}),
+	)
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	// Check that user tags were included
+	foundTeam := false
+	foundEnv := false
+	for _, tag := range receivedTags {
+		if tag["key"] == "team" && tag["value"] == "ml" {
+			foundTeam = true
+		}
+		if tag["key"] == "env" && tag["value"] == "prod" {
+			foundEnv = true
+		}
+	}
+	if !foundTeam {
+		t.Error("expected team tag to be sent")
+	}
+	if !foundEnv {
+		t.Error("expected env tag to be sent")
+	}
+}
+
+func TestRegisterPrompt_PermissionDenied(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "PERMISSION_DENIED",
+			"message":    "User lacks permission to create prompts",
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.RegisterPrompt(context.Background(), "new-prompt", "Template")
+	if err == nil {
+		t.Error("expected error for permission denied")
+	}
+	if !IsPermissionDenied(err) {
+		t.Errorf("expected IsPermissionDenied, got %v", err)
+	}
+}

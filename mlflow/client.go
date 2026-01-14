@@ -225,3 +225,95 @@ func (mv *modelVersionJSON) toPrompt() *Prompt {
 
 	return p
 }
+
+// RegisterPrompt registers a prompt in the registry.
+// If the prompt doesn't exist, it creates a new one with version 1.
+// If the prompt exists, it creates a new version.
+func (c *Client) RegisterPrompt(ctx context.Context, name, template string, opts ...RegisterOption) (*Prompt, error) {
+	regOpts := &registerOptions{}
+	for _, opt := range opts {
+		opt(regOpts)
+	}
+
+	// Step 1: Ensure the RegisteredModel exists
+	if err := c.ensureRegisteredModel(ctx, name); err != nil {
+		return nil, err
+	}
+
+	// Step 2: Create a new ModelVersion with the template
+	return c.createModelVersion(ctx, name, template, regOpts)
+}
+
+// ensureRegisteredModel creates the RegisteredModel if it doesn't exist.
+func (c *Client) ensureRegisteredModel(ctx context.Context, name string) error {
+	req := createRegisteredModelRequest{
+		Name: name,
+		Tags: []modelVersionTag{
+			{Key: tagIsPrompt, Value: "true"},
+		},
+	}
+
+	var resp struct {
+		RegisteredModel struct {
+			Name string `json:"name"`
+		} `json:"registered_model"`
+	}
+
+	err := c.transport.Post(ctx, "/api/2.0/mlflow/registered-models/create", req, &resp)
+	if err != nil {
+		// Ignore 409 (already exists) - that's expected for existing prompts
+		if IsAlreadyExists(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to create prompt: %w", err)
+	}
+
+	return nil
+}
+
+// createModelVersion creates a new version of the prompt with the template.
+func (c *Client) createModelVersion(ctx context.Context, name, template string, opts *registerOptions) (*Prompt, error) {
+	// Build tags for the version
+	tags := []modelVersionTag{
+		{Key: tagPromptText, Value: template},
+		{Key: tagPromptType, Value: "text"},
+	}
+
+	// Add user-provided tags
+	for k, v := range opts.tags {
+		tags = append(tags, modelVersionTag{Key: k, Value: v})
+	}
+
+	req := createModelVersionRequest{
+		Name:        name,
+		Source:      "mlflow-artifacts:/" + name,
+		Description: opts.description,
+		Tags:        tags,
+	}
+
+	var resp struct {
+		ModelVersion modelVersionJSON `json:"model_version"`
+	}
+
+	err := c.transport.Post(ctx, "/api/2.0/mlflow/model-versions/create", req, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prompt version: %w", err)
+	}
+
+	return resp.ModelVersion.toPrompt(), nil
+}
+
+// createRegisteredModelRequest is the request body for creating a RegisteredModel.
+type createRegisteredModelRequest struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Tags        []modelVersionTag `json:"tags,omitempty"`
+}
+
+// createModelVersionRequest is the request body for creating a ModelVersion.
+type createModelVersionRequest struct {
+	Name        string            `json:"name"`
+	Source      string            `json:"source"`
+	Description string            `json:"description,omitempty"`
+	Tags        []modelVersionTag `json:"tags,omitempty"`
+}
