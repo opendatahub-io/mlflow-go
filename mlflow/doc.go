@@ -1,5 +1,5 @@
 // ABOUTME: Package mlflow provides a Go SDK for the MLflow platform.
-// ABOUTME: This is the root package containing shared types and the main Client.
+// ABOUTME: This is the main package containing the Client and Prompt types.
 
 // Package mlflow provides a Go SDK for the MLflow platform.
 //
@@ -15,7 +15,7 @@
 //	    log.Fatal(err)
 //	}
 //
-//	prompt, err := client.PromptRegistry().LoadPrompt(ctx, "my-prompt")
+//	prompt, err := client.LoadPrompt(ctx, "my-prompt")
 //	if err != nil {
 //	    if mlflow.IsNotFound(err) {
 //	        log.Fatal("prompt not found")

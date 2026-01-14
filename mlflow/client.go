@@ -165,12 +165,12 @@ func (c *Client) loadPromptVersion(ctx context.Context, name string, version int
 
 // modelVersionJSON represents the JSON structure of a model version response.
 type modelVersionJSON struct {
-	Name                 string             `json:"name"`
-	Version              string             `json:"version"`
-	Description          string             `json:"description"`
-	CreationTimestamp    int64              `json:"creation_timestamp"`
-	LastUpdatedTimestamp int64              `json:"last_updated_timestamp"`
-	Tags                 []modelVersionTag  `json:"tags"`
+	Name                 string            `json:"name"`
+	Version              string            `json:"version"`
+	Description          string            `json:"description"`
+	CreationTimestamp    int64             `json:"creation_timestamp"`
+	LastUpdatedTimestamp int64             `json:"last_updated_timestamp"`
+	Tags                 []modelVersionTag `json:"tags"`
 }
 
 type modelVersionTag struct {
@@ -180,10 +180,10 @@ type modelVersionTag struct {
 
 // Prompt tag keys used by MLflow to store prompt metadata.
 const (
-	tagPromptText   = "mlflow.prompt.text"
-	tagIsPrompt     = "mlflow.prompt.is_prompt"
-	tagPromptType   = "_mlflow_prompt_type"
-	tagDescription  = "mlflow.prompt.description"
+	tagPromptText  = "mlflow.prompt.text"
+	tagIsPrompt    = "mlflow.prompt.is_prompt"
+	tagPromptType  = "_mlflow_prompt_type"
+	tagDescription = "mlflow.prompt.description"
 )
 
 func (mv *modelVersionJSON) toPrompt() *Prompt {
