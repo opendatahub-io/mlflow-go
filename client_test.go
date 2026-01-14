@@ -4,6 +4,10 @@
 package mlflow
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 )
@@ -142,5 +146,151 @@ func TestNewClient_InvalidURI(t *testing.T) {
 	)
 	if err == nil {
 		t.Error("expected error for invalid URI")
+	}
+}
+
+func TestLoadPrompt_Success(t *testing.T) {
+	// Create test server that simulates MLflow API
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api/2.0/mlflow/registered-models/get":
+			json.NewEncoder(w).Encode(map[string]any{
+				"registered_model": map[string]any{
+					"name": "test-prompt",
+					"latest_versions": []map[string]any{
+						{"version": "2"},
+					},
+				},
+			})
+		case "/api/2.0/mlflow/model-versions/get":
+			json.NewEncoder(w).Encode(map[string]any{
+				"model_version": map[string]any{
+					"name":                   "test-prompt",
+					"version":                "2",
+					"description":            "A test prompt",
+					"creation_timestamp":     1700000000000,
+					"last_updated_timestamp": 1700000100000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+						{"key": "mlflow.prompt.text", "value": "Hello, {{name}}!"},
+						{"key": "team", "value": "ml"},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	prompt, err := client.LoadPrompt(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("LoadPrompt() error = %v", err)
+	}
+
+	if prompt.Name != "test-prompt" {
+		t.Errorf("Name = %q, want %q", prompt.Name, "test-prompt")
+	}
+	if prompt.Version != 2 {
+		t.Errorf("Version = %d, want %d", prompt.Version, 2)
+	}
+	if prompt.Template != "Hello, {{name}}!" {
+		t.Errorf("Template = %q, want %q", prompt.Template, "Hello, {{name}}!")
+	}
+	if prompt.Description != "A test prompt" {
+		t.Errorf("Description = %q, want %q", prompt.Description, "A test prompt")
+	}
+	if prompt.Tags["team"] != "ml" {
+		t.Errorf("Tags[team] = %q, want %q", prompt.Tags["team"], "ml")
+	}
+	// Internal tags should not be exposed
+	if _, ok := prompt.Tags["mlflow.prompt.is_prompt"]; ok {
+		t.Error("internal tag should not be in user tags")
+	}
+}
+
+func TestLoadPrompt_WithVersion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path != "/api/2.0/mlflow/model-versions/get" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+
+		version := r.URL.Query().Get("version")
+		if version != "3" {
+			t.Errorf("version = %q, want %q", version, "3")
+		}
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"model_version": map[string]any{
+				"name":    "test-prompt",
+				"version": "3",
+				"tags": []map[string]string{
+					{"key": "mlflow.prompt.text", "value": "Version 3 template"},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	prompt, err := client.LoadPrompt(context.Background(), "test-prompt", WithVersion(3))
+	if err != nil {
+		t.Fatalf("LoadPrompt() error = %v", err)
+	}
+
+	if prompt.Version != 3 {
+		t.Errorf("Version = %d, want %d", prompt.Version, 3)
+	}
+	if prompt.Template != "Version 3 template" {
+		t.Errorf("Template = %q, want %q", prompt.Template, "Version 3 template")
+	}
+}
+
+func TestLoadPrompt_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "RESOURCE_DOES_NOT_EXIST",
+			"message":    "Registered Model with name=unknown not found",
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.LoadPrompt(context.Background(), "unknown")
+	if err == nil {
+		t.Error("expected error for non-existent prompt")
+	}
+	if !IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
 	}
 }
