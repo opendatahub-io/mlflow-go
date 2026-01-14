@@ -1,0 +1,5 @@
+# ABOUTME: Pins the MLflow commit SHA used for protobuf generation.
+# ABOUTME: Used by fetch-protos.sh to fetch the correct proto files.
+
+# MLflow v3.7.0 - Latest stable release with Prompt Registry support
+MLFLOW_COMMIT=c4d8b3a29dff5b443bb825dbaec735c37343a801

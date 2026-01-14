@@ -32,9 +32,13 @@ Thumbs.db
 bin/
 dist/
 
+# MLflow local development data
+.mlflow/
+
 # Claude
 .claude/
 CLAUDE.md
 
 # Speckit
 .specify/
+specs/

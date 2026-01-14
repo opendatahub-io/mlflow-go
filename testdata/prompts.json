@@ -1,0 +1,36 @@
+{
+  "prompts": [
+    {
+      "name": "greeting-prompt",
+      "description": "A simple greeting prompt for testing",
+      "versions": [
+        {
+          "template": "Hello {{name}}!",
+          "description": "Initial version",
+          "tags": [{"key": "author", "value": "test@example.com"}]
+        }
+      ]
+    },
+    {
+      "name": "qa-prompt",
+      "description": "A question-answering prompt with multiple versions",
+      "versions": [
+        {
+          "template": "Answer the following question: {{question}}",
+          "description": "Version 1 - basic",
+          "tags": [{"key": "type", "value": "qa"}]
+        },
+        {
+          "template": "Context: {{context}}\n\nQuestion: {{question}}\n\nAnswer:",
+          "description": "Version 2 - with context",
+          "tags": [{"key": "type", "value": "qa"}, {"key": "has_context", "value": "true"}]
+        },
+        {
+          "template": "You are a helpful assistant. Given the context below, answer the question.\n\nContext: {{context}}\n\nQuestion: {{question}}\n\nProvide a clear and concise answer:",
+          "description": "Version 3 - with system prompt",
+          "tags": [{"key": "type", "value": "qa"}, {"key": "has_context", "value": "true"}, {"key": "has_system", "value": "true"}]
+        }
+      ]
+    }
+  ]
+}
