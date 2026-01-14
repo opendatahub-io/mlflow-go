@@ -1,7 +1,7 @@
 # ABOUTME: Build and development automation for the MLflow Go SDK.
 # ABOUTME: Provides targets for testing, code generation, and local MLflow server management.
 
-.PHONY: test/unit test/integration gen dev/up dev/down dev/reset help lint vet fmt tidy check
+.PHONY: test/unit test/integration gen dev/up dev/down dev/reset help lint vet fmt tidy check run-sample
 
 # Configuration
 MLFLOW_PORT ?= 5000
@@ -34,6 +34,9 @@ help:
 	@echo ""
 	@echo "Code Generation:"
 	@echo "  make gen              - Generate protobuf types from MLflow protos"
+	@echo ""
+	@echo "Sample:"
+	@echo "  make run-sample       - Run sample app (requires dev/up)"
 
 # Testing targets
 test/unit:
@@ -108,7 +111,7 @@ dev/up: $(UV)
 
 dev/down:
 	@echo "Stopping MLflow server..."
-	@pkill -f "mlflow server" 2>/dev/null || true
+	@lsof -t -i :$(MLFLOW_PORT) | xargs kill 2>/dev/null || true
 	@echo "MLflow server stopped."
 
 dev/reset: dev/down
@@ -118,3 +121,8 @@ dev/reset: dev/down
 	@echo "Seeding sample prompts..."
 	@./scripts/seed-prompts.sh || echo "Note: seed script not yet created"
 	@echo "MLflow reset complete."
+
+# Sample app
+run-sample:
+	@echo "Running sample app..."
+	cd sample-app && go run .

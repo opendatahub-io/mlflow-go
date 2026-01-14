@@ -1,6 +1,6 @@
 # mlflow-go
 
-A Go SDK for the [MLflow](https://mlflow.org) Prompt Registry.
+A tiny Go SDK for the [MLflow](https://mlflow.org) Prompt Registry.
 
 ## Features
 
