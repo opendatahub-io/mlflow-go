@@ -1,0 +1,53 @@
+# ABOUTME: Configuration for golangci-lint.
+# ABOUTME: Defines linting rules and enabled linters for the SDK.
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck       # Check for unchecked errors
+    - gosimple       # Simplify code
+    - govet          # Reports suspicious constructs
+    - ineffassign    # Detect ineffectual assignments
+    - staticcheck    # Advanced static analysis
+    - unused         # Check for unused code
+    - gofmt          # Check formatting
+    - goimports      # Check imports
+    - misspell       # Check spelling
+    - unconvert      # Remove unnecessary conversions
+    - unparam        # Find unused function parameters
+    - gocritic       # Opinionated linter
+    - revive         # Fast, configurable linter
+    - gosec          # Security checks
+    - prealloc       # Find slice preallocation opportunities
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment  # Micro-optimization, not critical
+  revive:
+    rules:
+      - name: exported
+        disabled: true  # We handle doc comments manually
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked (handled by errcheck)
+
+issues:
+  exclude-rules:
+    # Test files can have unchecked errors and complexity
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocritic
+        - gosec
+    # Generated protobuf files
+    - path: internal/gen/
+      linters:
+        - all

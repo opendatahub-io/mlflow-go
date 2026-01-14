@@ -1,7 +1,7 @@
 # ABOUTME: Build and development automation for the MLflow Go SDK.
 # ABOUTME: Provides targets for testing, code generation, and local MLflow server management.
 
-.PHONY: test/unit test/integration gen dev/up dev/down dev/reset help
+.PHONY: test/unit test/integration gen dev/up dev/down dev/reset help lint vet fmt tidy check
 
 # Configuration
 MLFLOW_PORT ?= 5000
@@ -9,14 +9,23 @@ MLFLOW_DATA ?= $(shell pwd)/.mlflow
 LOCALBIN ?= $(shell pwd)/bin
 UV ?= $(LOCALBIN)/uv
 PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+GOLANGCI_LINT_VERSION ?= v1.63.4
 
 # Help target
 help:
 	@echo "MLflow Go SDK - Development Commands"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test/unit        - Run unit tests"
+	@echo "  make test/unit        - Run unit tests with race detector"
 	@echo "  make test/integration - Run integration tests (requires dev/up)"
+	@echo "  make check            - Run all checks (lint, vet, test)"
+	@echo ""
+	@echo "Linting:"
+	@echo "  make lint             - Run golangci-lint"
+	@echo "  make vet              - Run go vet"
+	@echo "  make fmt              - Format code with gofmt"
+	@echo "  make tidy             - Run go mod tidy"
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev/up           - Start local MLflow server"
@@ -34,6 +43,27 @@ test/integration: dev/up
 	MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
 	go test -v -race -tags=integration ./...
+
+# Linting targets
+$(GOLANGCI_LINT):
+	@mkdir -p $(LOCALBIN)
+	@echo "Installing golangci-lint..."
+	GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+lint: $(GOLANGCI_LINT)
+	$(GOLANGCI_LINT) run ./...
+
+vet:
+	go vet ./...
+
+fmt:
+	gofmt -w -s .
+
+tidy:
+	go mod tidy
+
+check: lint vet test/unit
+	@echo "All checks passed!"
 
 # Protoc-gen-go installation (lazy install)
 $(PROTOC_GEN_GO):
