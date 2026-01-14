@@ -6,6 +6,7 @@ package transport
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -237,5 +238,166 @@ func TestClient_NoAuthHeader_WhenNoToken(t *testing.T) {
 	err = client.Get(context.Background(), "/api/test", nil, nil)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
+	}
+}
+
+// testLogHandler captures log records for testing.
+type testLogHandler struct {
+	records []testLogRecord
+}
+
+type testLogRecord struct {
+	Level   string
+	Message string
+	Attrs   map[string]any
+}
+
+func (h *testLogHandler) Enabled(_ context.Context, _ slog.Level) bool {
+	return true
+}
+
+func (h *testLogHandler) Handle(_ context.Context, r slog.Record) error {
+	record := testLogRecord{
+		Level:   r.Level.String(),
+		Message: r.Message,
+		Attrs:   make(map[string]any),
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		record.Attrs[a.Key] = a.Value.Any()
+		return true
+	})
+	h.records = append(h.records, record)
+	return nil
+}
+
+func (h *testLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return h
+}
+
+func (h *testLogHandler) WithGroup(name string) slog.Handler {
+	return h
+}
+
+func TestClient_LogsRequestAndResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer server.Close()
+
+	handler := &testLogHandler{}
+	logger := slog.New(handler)
+
+	client, err := New(Config{
+		BaseURL: server.URL,
+		Token:   "secret-token",
+		Logger:  logger,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var result map[string]string
+	err = client.Get(context.Background(), "/api/test", nil, &result)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	// Should have 2 log records: request and response
+	if len(handler.records) != 2 {
+		t.Fatalf("expected 2 log records, got %d", len(handler.records))
+	}
+
+	// Check request log
+	reqLog := handler.records[0]
+	if reqLog.Message != "request" {
+		t.Errorf("request log message = %q, want %q", reqLog.Message, "request")
+	}
+	if reqLog.Attrs["method"] != "GET" {
+		t.Errorf("request log method = %v, want GET", reqLog.Attrs["method"])
+	}
+	if reqLog.Attrs["url"] == nil {
+		t.Error("request log should have url")
+	}
+
+	// Check response log
+	respLog := handler.records[1]
+	if respLog.Message != "response" {
+		t.Errorf("response log message = %q, want %q", respLog.Message, "response")
+	}
+	if respLog.Attrs["status"] != int64(200) {
+		t.Errorf("response log status = %v, want 200", respLog.Attrs["status"])
+	}
+	if respLog.Attrs["duration_ms"] == nil {
+		t.Error("response log should have duration_ms")
+	}
+}
+
+func TestClient_NoLogsWithoutLogger(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// No logger provided
+	client, err := New(Config{BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	// This should not panic or fail even without a logger
+	err = client.Get(context.Background(), "/api/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+}
+
+func TestClient_LogsNeverIncludeSecrets(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"secret": "should-not-be-logged"}`))
+	}))
+	defer server.Close()
+
+	handler := &testLogHandler{}
+	logger := slog.New(handler)
+
+	client, err := New(Config{
+		BaseURL: server.URL,
+		Token:   "super-secret-token",
+		Logger:  logger,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	body := map[string]string{"password": "secret123", "template": "Hello {{name}}"}
+	err = client.Post(context.Background(), "/api/test", body, nil)
+	if err != nil {
+		t.Fatalf("Post() error = %v", err)
+	}
+
+	// Verify no secrets in logs
+	for _, record := range handler.records {
+		for key, val := range record.Attrs {
+			strVal, ok := val.(string)
+			if !ok {
+				continue
+			}
+			// Check that sensitive data is not logged
+			if key == "token" || key == "password" || key == "secret" {
+				t.Errorf("sensitive key %q should not be logged", key)
+			}
+			if strVal == "super-secret-token" || strVal == "secret123" {
+				t.Errorf("sensitive value should not be logged: %s=%s", key, strVal)
+			}
+			// Body content should not be logged
+			if strVal == "Hello {{name}}" {
+				t.Errorf("request body content should not be logged")
+			}
+			if strVal == "should-not-be-logged" {
+				t.Errorf("response body content should not be logged")
+			}
+		}
 	}
 }
