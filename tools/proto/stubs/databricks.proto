@@ -1,0 +1,84 @@
+// ABOUTME: Minimal stub for databricks.proto to satisfy MLflow proto imports.
+// ABOUTME: Contains only the option definitions used by MLflow protos.
+
+syntax = "proto2";
+
+package mlflow;
+
+import "google/protobuf/descriptor.proto";
+
+// Visibility enum used in field options
+enum Visibility {
+  PUBLIC = 1;
+  INTERNAL = 2;
+  PUBLIC_UNDOCUMENTED = 3;
+}
+
+// RPC options message (simplified)
+message DatabricksRpcOptions {
+  repeated HttpEndpoint endpoints = 1;
+  optional Visibility visibility = 2;
+  optional string rpc_doc = 3;
+  optional string rpc_doc_title = 4;
+  optional string error_codes = 5;
+}
+
+message HttpEndpoint {
+  optional string method = 1;
+  optional string path = 2;
+  optional ApiVersion since = 3;
+}
+
+message ApiVersion {
+  optional int32 major = 1;
+  optional int32 minor = 2;
+}
+
+// Documentation metadata (simplified)
+message DocumentationMetadata {
+  optional string docstring = 1;
+  optional string lead_doc = 2;
+}
+
+// Field-level options
+extend google.protobuf.FieldOptions {
+  optional Visibility visibility = 51310;
+  optional bool validate_required = 51311;
+  optional bool json_inline = 51312;
+  optional bool json_map = 51313;
+  optional string field_doc = 51314;
+}
+
+// GraphQL options (simplified)
+message GraphQLOptions {
+  optional string query = 1;
+  optional string mutation = 2;
+}
+
+// Method-level options
+extend google.protobuf.MethodOptions {
+  optional DatabricksRpcOptions rpc = 51320;
+  optional DocumentationMetadata method_doc = 51321;
+  optional GraphQLOptions graphql = 51322;
+}
+
+// Message-level options
+extend google.protobuf.MessageOptions {
+  optional DocumentationMetadata message_doc = 51330;
+}
+
+// Service-level options
+extend google.protobuf.ServiceOptions {
+  optional DocumentationMetadata service_doc = 51340;
+}
+
+// Enum-level options
+extend google.protobuf.EnumOptions {
+  optional DocumentationMetadata enum_doc = 51350;
+}
+
+// Enum value options
+extend google.protobuf.EnumValueOptions {
+  optional Visibility enum_value_visibility = 51360;
+  optional DocumentationMetadata enum_value_doc = 51361;
+}

@@ -29,9 +29,9 @@ mkdir -p "${OUTPUT_DIR}"
 # Base URL for raw proto files
 BASE_URL="https://raw.githubusercontent.com/mlflow/mlflow/${MLFLOW_COMMIT}/mlflow/protos"
 
-# Proto files needed for Prompt Registry
+# Proto files needed for Prompt Registry (Model Registry for OSS MLflow)
 PROTO_FILES=(
-    "unity_catalog_oss_messages.proto"
+    "model_registry.proto"
 )
 
 echo "Fetching MLflow protos from commit ${MLFLOW_COMMIT}..."
@@ -39,6 +39,16 @@ echo "Fetching MLflow protos from commit ${MLFLOW_COMMIT}..."
 for proto in "${PROTO_FILES[@]}"; do
     echo "  Downloading ${proto}..."
     curl -sSfL "${BASE_URL}/${proto}" -o "${OUTPUT_DIR}/${proto}"
+done
+
+# Post-process: Remove scalapb import and options (Scala-specific, not needed for Go)
+echo "  Post-processing: removing scalapb references..."
+for proto in "${PROTO_FILES[@]}"; do
+    sed -i '' \
+        -e '/import "scalapb\/scalapb.proto";/d' \
+        -e '/option (scalapb/d' \
+        -e '/(scalapb.message)/d' \
+        "${OUTPUT_DIR}/${proto}"
 done
 
 echo "Proto files downloaded to ${OUTPUT_DIR}"

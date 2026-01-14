@@ -8,6 +8,7 @@ MLFLOW_PORT ?= 5000
 MLFLOW_DATA ?= $(shell pwd)/.mlflow
 LOCALBIN ?= $(shell pwd)/bin
 UV ?= $(LOCALBIN)/uv
+PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 
 # Help target
 help:
@@ -34,14 +35,26 @@ test/integration: dev/up
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
 	go test -v -race -tags=integration ./...
 
+# Protoc-gen-go installation (lazy install)
+$(PROTOC_GEN_GO):
+	@mkdir -p $(LOCALBIN)
+	@echo "Installing protoc-gen-go..."
+	GOBIN=$(LOCALBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
 # Code generation
-gen: tools/proto/fetch-protos.sh
+gen: tools/proto/fetch-protos.sh $(PROTOC_GEN_GO)
 	@echo "Fetching MLflow protos..."
 	@./tools/proto/fetch-protos.sh
 	@echo "Generating Go types..."
-	@protoc --go_out=. --go_opt=paths=source_relative \
-		internal/gen/mlflowpb/*.proto 2>/dev/null || \
-		echo "Note: protoc generation skipped (protos not yet fetched)"
+	@which protoc > /dev/null || (echo "Error: protoc not installed. Install via: brew install protobuf" && exit 1)
+	PATH=$(LOCALBIN):$$PATH protoc \
+		--proto_path=internal/gen/mlflowpb \
+		--proto_path=tools/proto/stubs \
+		--go_out=internal/gen/mlflowpb \
+		--go_opt=paths=source_relative \
+		--go_opt=Mmodel_registry.proto=github.com/ederign/mlflow-go/internal/gen/mlflowpb \
+		--go_opt=Mdatabricks.proto=github.com/ederign/mlflow-go/internal/gen/mlflowpb \
+		model_registry.proto databricks.proto
 
 # UV installation (lazy install)
 $(UV):
