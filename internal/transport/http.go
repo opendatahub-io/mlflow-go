@@ -14,7 +14,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ederign/mlflow-go"
+	"github.com/ederign/mlflow-go/internal/errors"
 )
 
 // Client handles HTTP communication with the MLflow API.
@@ -151,13 +151,13 @@ func (c *Client) parseError(statusCode int, body []byte) error {
 	var errResp errorResponse
 	if err := json.Unmarshal(body, &errResp); err != nil {
 		// If we can't parse the error, return a generic one
-		return &mlflow.APIError{
+		return &errors.APIError{
 			StatusCode: statusCode,
 			Message:    string(body),
 		}
 	}
 
-	return &mlflow.APIError{
+	return &errors.APIError{
 		StatusCode: statusCode,
 		Code:       errResp.ErrorCode,
 		Message:    errResp.Message,

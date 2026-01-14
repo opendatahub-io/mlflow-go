@@ -1,78 +1,36 @@
-// ABOUTME: Defines typed errors for MLflow API failures.
+// ABOUTME: Re-exports error types from internal package for public API.
 // ABOUTME: Provides helper functions to check error types (IsNotFound, IsUnauthorized, etc).
 
 package mlflow
 
 import (
-	"errors"
-	"fmt"
-	"net/http"
+	internalerrors "github.com/ederign/mlflow-go/internal/errors"
 )
 
 // APIError represents an error response from the MLflow API.
-type APIError struct {
-	// StatusCode is the HTTP status code.
-	StatusCode int
-
-	// Code is the MLflow error code (e.g., "RESOURCE_DOES_NOT_EXIST").
-	Code string
-
-	// Message is the human-readable error message.
-	Message string
-
-	// RequestID is the server request ID for debugging (if available).
-	RequestID string
-}
-
-// Error implements the error interface.
-func (e *APIError) Error() string {
-	if e.Code != "" {
-		return fmt.Sprintf("mlflow: %s: %s (status %d)", e.Code, e.Message, e.StatusCode)
-	}
-	return fmt.Sprintf("mlflow: %s (status %d)", e.Message, e.StatusCode)
-}
+type APIError = internalerrors.APIError
 
 // IsNotFound reports whether err indicates a resource was not found (404).
 func IsNotFound(err error) bool {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusNotFound
-	}
-	return false
+	return internalerrors.IsNotFound(err)
 }
 
 // IsUnauthorized reports whether err indicates invalid or missing credentials (401).
 func IsUnauthorized(err error) bool {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusUnauthorized
-	}
-	return false
+	return internalerrors.IsUnauthorized(err)
 }
 
 // IsPermissionDenied reports whether err indicates the caller lacks permission (403).
 func IsPermissionDenied(err error) bool {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusForbidden
-	}
-	return false
+	return internalerrors.IsPermissionDenied(err)
 }
 
 // IsInvalidArgument reports whether err indicates an invalid argument (400).
 func IsInvalidArgument(err error) bool {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusBadRequest
-	}
-	return false
+	return internalerrors.IsInvalidArgument(err)
 }
 
 // IsAlreadyExists reports whether err indicates the resource already exists (409).
 func IsAlreadyExists(err error) bool {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusConflict
-	}
-	return false
+	return internalerrors.IsAlreadyExists(err)
 }

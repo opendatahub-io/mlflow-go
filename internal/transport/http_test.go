@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ederign/mlflow-go"
+	"github.com/ederign/mlflow-go/internal/errors"
 )
 
 func TestClient_Get_Success(t *testing.T) {
@@ -110,11 +110,11 @@ func TestClient_Error_NotFound(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	if !mlflow.IsNotFound(err) {
+	if !errors.IsNotFound(err) {
 		t.Errorf("expected IsNotFound, got %v", err)
 	}
 
-	apiErr, ok := err.(*mlflow.APIError)
+	apiErr, ok := err.(*errors.APIError)
 	if !ok {
 		t.Fatalf("expected *APIError, got %T", err)
 	}
@@ -140,7 +140,7 @@ func TestClient_Error_BadRequest(t *testing.T) {
 	}
 
 	err = client.Post(context.Background(), "/api/test", nil, nil)
-	if !mlflow.IsInvalidArgument(err) {
+	if !errors.IsInvalidArgument(err) {
 		t.Errorf("expected IsInvalidArgument, got %v", err)
 	}
 }
@@ -162,7 +162,7 @@ func TestClient_Error_Conflict(t *testing.T) {
 	}
 
 	err = client.Post(context.Background(), "/api/test", nil, nil)
-	if !mlflow.IsAlreadyExists(err) {
+	if !errors.IsAlreadyExists(err) {
 		t.Errorf("expected IsAlreadyExists, got %v", err)
 	}
 }
