@@ -61,11 +61,13 @@ func IsInvalidArgument(err error) bool {
 	return false
 }
 
-// IsAlreadyExists reports whether err indicates the resource already exists (409).
+// IsAlreadyExists reports whether err indicates the resource already exists.
+// Checks for HTTP 409 Conflict or MLflow's RESOURCE_ALREADY_EXISTS error code.
 func IsAlreadyExists(err error) bool {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusConflict
+		return apiErr.StatusCode == http.StatusConflict ||
+			apiErr.Code == "RESOURCE_ALREADY_EXISTS"
 	}
 	return false
 }
