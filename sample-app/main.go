@@ -28,14 +28,14 @@ func main() {
 	fmt.Printf("Connected to MLflow at %s\n\n", client.TrackingURI())
 
 	// Generate a unique prompt name for this run
-	promptName := fmt.Sprintf("sample-prompt-%d", rand.IntN(10000))
+	promptName := fmt.Sprintf("bella-dora-walks-%d", rand.IntN(10000))
 
 	// === Path 1: RegisterPrompt - Create a new prompt ===
 	fmt.Println("=== 1. RegisterPrompt: Creating a new prompt ===")
 	prompt1, err := client.RegisterPrompt(ctx, promptName,
-		"Hello {{name}}, welcome to {{place}}!",
-		mlflow.WithDescription("Initial version of greeting prompt"),
-		mlflow.WithTags(map[string]string{"author": "sample-app", "type": "greeting"}),
+		"Time to walk Bella and Dora! Meeting at {{location}} at {{time}}.",
+		mlflow.WithDescription("Basic walk reminder for Bella and Dora"),
+		mlflow.WithTags(map[string]string{"author": "sample-app", "dogs": "bella,dora"}),
 	)
 	if err != nil {
 		log.Fatalf("Failed to register prompt: %v", err)
@@ -45,8 +45,8 @@ func main() {
 	// Create a second version to demonstrate versioning
 	fmt.Println("\n=== 1b. RegisterPrompt: Creating version 2 ===")
 	prompt2, err := client.RegisterPrompt(ctx, promptName,
-		"Greetings {{name}}! Welcome to {{place}}. How are you today?",
-		mlflow.WithDescription("More friendly greeting"),
+		"Hey {{owner}}! Bella and Dora are ready for their walk at {{time}}. Don't forget the treats!",
+		mlflow.WithDescription("Added owner name and treats reminder"),
 	)
 	if err != nil {
 		log.Fatalf("Failed to register prompt v2: %v", err)

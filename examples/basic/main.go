@@ -56,8 +56,8 @@ func main() {
 	// Example 3: Modify locally and register new version
 	fmt.Println("=== Modifying and Registering ===")
 	modified := prompt.
-		WithTemplate("Hello {{name}}! Welcome to {{company}} on this fine {{day}}!").
-		WithDescription("Added day variable")
+		WithTemplate("Hello {{name}}! Bella and Dora welcome you to {{company}}!").
+		WithDescription("Added Bella and Dora")
 
 	fmt.Printf("Local modification (original unchanged): %s\n", modified.Template)
 	fmt.Printf("Original still: %s\n", prompt.Template)

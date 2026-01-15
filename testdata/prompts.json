@@ -5,9 +5,25 @@
       "description": "A simple greeting prompt for testing",
       "versions": [
         {
-          "template": "Hello {{name}}!",
-          "description": "Initial version",
+          "template": "Hello {{name}}! Bella and Dora say woof!",
+          "description": "Initial version with Bella and Dora",
           "tags": [{"key": "author", "value": "test@example.com"}]
+        }
+      ]
+    },
+    {
+      "name": "dog-walker-prompt",
+      "description": "A prompt for scheduling dog walks with Bella and Dora",
+      "versions": [
+        {
+          "template": "Schedule a walk for Bella and Dora at {{time}} in {{location}}.",
+          "description": "Basic walk scheduling",
+          "tags": [{"key": "dogs", "value": "bella,dora"}]
+        },
+        {
+          "template": "Hi {{owner}}! Time to walk Bella and Dora at {{time}}. Meeting point: {{location}}. Don't forget the treats!",
+          "description": "Added owner and treats reminder",
+          "tags": [{"key": "dogs", "value": "bella,dora"}, {"key": "has_treats", "value": "true"}]
         }
       ]
     },

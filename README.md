@@ -94,12 +94,12 @@ prompt, err := client.LoadPrompt(ctx, "my-prompt", mlflow.WithVersion(2))
 ### Register a New Prompt
 
 ```go
-prompt, err := client.RegisterPrompt(ctx, "greeting-prompt",
-    "Hello {{name}}, welcome to {{company}}!",
-    mlflow.WithDescription("Initial greeting template"),
+prompt, err := client.RegisterPrompt(ctx, "dog-walker-prompt",
+    "Time to walk Bella and Dora! Meeting at {{location}} at {{time}}.",
+    mlflow.WithDescription("Walk reminder for Bella and Dora"),
     mlflow.WithTags(map[string]string{
-        "team": "ml-platform",
-        "category": "onboarding",
+        "dogs": "bella,dora",
+        "category": "scheduling",
     }),
 )
 fmt.Printf("Created: %s v%d\n", prompt.Name, prompt.Version)
@@ -109,15 +109,15 @@ fmt.Printf("Created: %s v%d\n", prompt.Name, prompt.Version)
 
 ```go
 // Load existing prompt
-prompt, err := client.LoadPrompt(ctx, "greeting-prompt")
+prompt, err := client.LoadPrompt(ctx, "dog-walker-prompt")
 if err != nil {
     log.Fatal(err)
 }
 
 // Modify locally (original unchanged)
 modified := prompt.
-    WithTemplate("Hello {{name}}! Welcome on {{day}}!").
-    WithDescription("Added day variable")
+    WithTemplate("Hey {{owner}}! Bella and Dora are ready for their walk. Don't forget the treats!").
+    WithDescription("Added owner and treats reminder")
 
 // Register as new version
 newVersion, err := client.RegisterPrompt(ctx, modified.Name, modified.Template,
@@ -167,7 +167,7 @@ if err != nil {
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.23+
 - MLflow server (for integration tests)
 
 ### Commands
@@ -185,11 +185,20 @@ make check
 # Start local MLflow server (requires uv)
 make dev/up
 
+# Seed sample prompts (featuring Bella and Dora!)
+make dev/seed
+
+# Run the sample app
+make run-sample
+
 # Run integration tests
 make test/integration
 
 # Stop local MLflow server
 make dev/down
+
+# Reset MLflow (nuke data)
+make dev/reset
 ```
 
 ### Project Structure
