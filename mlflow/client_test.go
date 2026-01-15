@@ -586,3 +586,308 @@ func TestRegisterPrompt_PermissionDenied(t *testing.T) {
 		t.Errorf("expected IsPermissionDenied, got %v", err)
 	}
 }
+
+func TestListPrompts_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path != "/api/2.0/mlflow/registered-models/search" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+
+		// Verify filter includes is_prompt tag
+		filter := r.URL.Query().Get("filter")
+		if filter == "" || !contains(filter, "mlflow.prompt.is_prompt") {
+			t.Errorf("filter should include is_prompt tag, got: %s", filter)
+		}
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{
+				{
+					"name":                   "greeting-prompt",
+					"description":            "A greeting prompt",
+					"creation_timestamp":     1700000000000,
+					"last_updated_timestamp": 1700000100000,
+					"latest_versions": []map[string]any{
+						{"version": "3"},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+						{"key": "team", "value": "ml"},
+					},
+				},
+				{
+					"name":        "qa-prompt",
+					"description": "A QA prompt",
+					"latest_versions": []map[string]any{
+						{"version": "1"},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+					},
+				},
+			},
+			"next_page_token": "token123",
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	result, err := client.ListPrompts(context.Background())
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if len(result.Prompts) != 2 {
+		t.Errorf("got %d prompts, want 2", len(result.Prompts))
+	}
+	if result.NextPageToken != "token123" {
+		t.Errorf("NextPageToken = %q, want %q", result.NextPageToken, "token123")
+	}
+
+	// Verify first prompt
+	p := result.Prompts[0]
+	if p.Name != "greeting-prompt" {
+		t.Errorf("Name = %q, want %q", p.Name, "greeting-prompt")
+	}
+	if p.LatestVersion != 3 {
+		t.Errorf("LatestVersion = %d, want %d", p.LatestVersion, 3)
+	}
+	if p.Tags["team"] != "ml" {
+		t.Errorf("Tags[team] = %q, want %q", p.Tags["team"], "ml")
+	}
+	// Internal tag should not be exposed
+	if _, ok := p.Tags["mlflow.prompt.is_prompt"]; ok {
+		t.Error("internal tag should not be in user tags")
+	}
+}
+
+func TestListPrompts_WithNameFilter(t *testing.T) {
+	var receivedFilter string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		receivedFilter = r.URL.Query().Get("filter")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.ListPrompts(context.Background(), WithNameFilter("greeting%"))
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if !contains(receivedFilter, "name LIKE 'greeting%'") {
+		t.Errorf("filter should include name pattern, got: %s", receivedFilter)
+	}
+}
+
+func TestListPrompts_WithPagination(t *testing.T) {
+	var receivedPageToken string
+	var receivedMaxResults string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		receivedPageToken = r.URL.Query().Get("page_token")
+		receivedMaxResults = r.URL.Query().Get("max_results")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.ListPrompts(context.Background(),
+		WithPageToken("abc123"),
+		WithMaxResults(50),
+	)
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if receivedPageToken != "abc123" {
+		t.Errorf("page_token = %q, want %q", receivedPageToken, "abc123")
+	}
+	if receivedMaxResults != "50" {
+		t.Errorf("max_results = %q, want %q", receivedMaxResults, "50")
+	}
+}
+
+func TestListPrompts_Empty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	result, err := client.ListPrompts(context.Background())
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if result.Prompts == nil {
+		t.Error("Prompts should not be nil, should be empty slice")
+	}
+	if len(result.Prompts) != 0 {
+		t.Errorf("got %d prompts, want 0", len(result.Prompts))
+	}
+}
+
+func TestListPromptVersions_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path != "/api/2.0/mlflow/model-versions/search" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+
+		// Verify filter includes prompt name
+		filter := r.URL.Query().Get("filter")
+		if !contains(filter, "name='test-prompt'") {
+			t.Errorf("filter should include prompt name, got: %s", filter)
+		}
+
+		// Verify default ordering
+		orderBy := r.URL.Query().Get("order_by")
+		if orderBy != "version_number DESC" {
+			t.Errorf("order_by = %q, want %q", orderBy, "version_number DESC")
+		}
+
+		json.NewEncoder(w).Encode(map[string]any{
+			"model_versions": []map[string]any{
+				{
+					"name":                   "test-prompt",
+					"version":                "3",
+					"description":            "Version 3",
+					"creation_timestamp":     1700000300000,
+					"last_updated_timestamp": 1700000300000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template v3"},
+						{"key": "author", "value": "alice"},
+					},
+				},
+				{
+					"name":               "test-prompt",
+					"version":            "2",
+					"description":        "Version 2",
+					"creation_timestamp": 1700000200000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template v2"},
+					},
+				},
+				{
+					"name":               "test-prompt",
+					"version":            "1",
+					"description":        "Version 1",
+					"creation_timestamp": 1700000100000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template v1"},
+					},
+				},
+			},
+			"next_page_token": "",
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	result, err := client.ListPromptVersions(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	if len(result.Versions) != 3 {
+		t.Errorf("got %d versions, want 3", len(result.Versions))
+	}
+
+	// Verify versions are returned (newest first due to default ordering)
+	if result.Versions[0].Version != 3 {
+		t.Errorf("first version = %d, want 3", result.Versions[0].Version)
+	}
+	if result.Versions[2].Version != 1 {
+		t.Errorf("last version = %d, want 1", result.Versions[2].Version)
+	}
+
+	// Template should be empty in listing results
+	if result.Versions[0].Template != "" {
+		t.Error("Template should be empty in listing results")
+	}
+
+	// User tags should be present
+	if result.Versions[0].Tags["author"] != "alice" {
+		t.Errorf("Tags[author] = %q, want %q", result.Versions[0].Tags["author"], "alice")
+	}
+}
+
+func TestListPromptVersions_EmptyName(t *testing.T) {
+	client, err := NewClient(
+		WithTrackingURI("https://mlflow.example.com"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.ListPromptVersions(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+// contains checks if s contains substr
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

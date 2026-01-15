@@ -5,6 +5,7 @@ A tiny Go SDK for the [MLflow](https://mlflow.org) Prompt Registry.
 ## Features
 
 - Load prompts by name (latest or specific version)
+- List prompts and versions with filtering and pagination
 - Register new prompts and versions
 - Modify prompts locally with immutable operations
 - Full context support for cancellation and timeouts
@@ -89,6 +90,49 @@ client, err := mlflow.NewClient(
 
 ```go
 prompt, err := client.LoadPrompt(ctx, "my-prompt", mlflow.WithVersion(2))
+```
+
+### List All Prompts
+
+```go
+list, err := client.ListPrompts(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, info := range list.Prompts {
+    fmt.Printf("%s (latest: v%d)\n", info.Name, info.LatestVersion)
+}
+
+// Pagination: fetch next page if available
+if list.NextPageToken != "" {
+    nextPage, err := client.ListPrompts(ctx, mlflow.WithPageToken(list.NextPageToken))
+    // ...
+}
+```
+
+### List Prompts with Filters
+
+```go
+// Filter by name pattern and tags
+list, err := client.ListPrompts(ctx,
+    mlflow.WithNameFilter("dog-%"),  // SQL LIKE syntax
+    mlflow.WithTagFilter(map[string]string{"category": "pets"}),
+    mlflow.WithMaxResults(10),
+)
+```
+
+### List Prompt Versions
+
+```go
+versions, err := client.ListPromptVersions(ctx, "my-prompt")
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, v := range versions.Versions {
+    fmt.Printf("v%d: %s\n", v.Version, v.Description)
+}
 ```
 
 ### Register a New Prompt

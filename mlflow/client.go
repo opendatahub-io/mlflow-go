@@ -368,3 +368,240 @@ type createModelVersionRequest struct {
 	Description string            `json:"description,omitempty"`
 	Tags        []modelVersionTag `json:"tags,omitempty"`
 }
+
+// registeredModelJSON represents the JSON structure of a registered model response.
+type registeredModelJSON struct {
+	Name                 string `json:"name"`
+	Description          string `json:"description"`
+	CreationTimestamp    int64  `json:"creation_timestamp"`
+	LastUpdatedTimestamp int64  `json:"last_updated_timestamp"`
+	LatestVersions       []struct {
+		Version string `json:"version"`
+	} `json:"latest_versions"`
+	Tags []modelVersionTag `json:"tags"`
+}
+
+func (rm *registeredModelJSON) toPromptInfo() PromptInfo {
+	info := PromptInfo{
+		Name:        rm.Name,
+		Description: rm.Description,
+		Tags:        make(map[string]string),
+	}
+
+	if rm.CreationTimestamp > 0 {
+		info.CreatedAt = time.UnixMilli(rm.CreationTimestamp)
+	}
+	if rm.LastUpdatedTimestamp > 0 {
+		info.UpdatedAt = time.UnixMilli(rm.LastUpdatedTimestamp)
+	}
+
+	// Get latest version number
+	if len(rm.LatestVersions) > 0 {
+		if v, err := strconv.Atoi(rm.LatestVersions[0].Version); err == nil {
+			info.LatestVersion = v
+		}
+	}
+
+	// Process tags (filter out internal ones)
+	for _, tag := range rm.Tags {
+		switch tag.Key {
+		case tagIsPrompt, tagPromptType:
+			// Internal tags, don't expose
+		default:
+			info.Tags[tag.Key] = tag.Value
+		}
+	}
+
+	return info
+}
+
+// toPromptWithoutTemplate converts a model version to a Prompt without loading template.
+// Used for listing operations where template content is not needed.
+func (mv *modelVersionJSON) toPromptWithoutTemplate() Prompt {
+	p := Prompt{
+		Name:        mv.Name,
+		Template:    "", // Intentionally empty for listings
+		Description: mv.Description,
+		Tags:        make(map[string]string),
+	}
+
+	// Parse version
+	if v, err := strconv.Atoi(mv.Version); err == nil {
+		p.Version = v
+	}
+
+	// Convert timestamps
+	if mv.CreationTimestamp > 0 {
+		p.CreatedAt = time.UnixMilli(mv.CreationTimestamp)
+	}
+	if mv.LastUpdatedTimestamp > 0 {
+		p.UpdatedAt = time.UnixMilli(mv.LastUpdatedTimestamp)
+	}
+
+	// Process tags (filter out internal ones including template)
+	for _, tag := range mv.Tags {
+		switch tag.Key {
+		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription:
+			// Internal tags, don't expose
+			// Also skip template for listing operations
+		default:
+			p.Tags[tag.Key] = tag.Value
+		}
+	}
+
+	// Check for description in tags (takes precedence)
+	for _, tag := range mv.Tags {
+		if tag.Key == tagDescription && tag.Value != "" {
+			p.Description = tag.Value
+			break
+		}
+	}
+
+	return p
+}
+
+// ListPrompts returns prompts matching the criteria.
+// Only prompts (RegisteredModels with is_prompt tag) are returned.
+// Returns metadata only; use LoadPrompt for full template content.
+func (c *Client) ListPrompts(ctx context.Context, opts ...ListPromptsOption) (*PromptList, error) {
+	listOpts := &listPromptsOptions{
+		maxResults: 100, // Default page size
+	}
+	for _, opt := range opts {
+		opt(listOpts)
+	}
+
+	query := url.Values{}
+	query.Set("filter", buildPromptsFilter(listOpts))
+
+	if listOpts.maxResults > 0 {
+		query.Set("max_results", strconv.Itoa(listOpts.maxResults))
+	}
+	if listOpts.pageToken != "" {
+		query.Set("page_token", listOpts.pageToken)
+	}
+	for _, o := range listOpts.orderBy {
+		query.Add("order_by", o)
+	}
+
+	var resp struct {
+		RegisteredModels []registeredModelJSON `json:"registered_models"`
+		NextPageToken    string                `json:"next_page_token"`
+	}
+
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/search", query, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list prompts: %w", err)
+	}
+
+	result := &PromptList{
+		Prompts:       make([]PromptInfo, 0, len(resp.RegisteredModels)),
+		NextPageToken: resp.NextPageToken,
+	}
+
+	for _, rm := range resp.RegisteredModels {
+		result.Prompts = append(result.Prompts, rm.toPromptInfo())
+	}
+
+	return result, nil
+}
+
+// buildPromptsFilter constructs the filter string for listing prompts.
+func buildPromptsFilter(opts *listPromptsOptions) string {
+	// Base filter: only return prompts
+	filters := []string{"tags.`" + tagIsPrompt + "` = 'true'"}
+
+	// Add name pattern if specified
+	if opts.nameFilter != "" {
+		filters = append(filters, fmt.Sprintf("name LIKE '%s'", opts.nameFilter))
+	}
+
+	// Add tag filters
+	for k, v := range opts.tagFilter {
+		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", k, v))
+	}
+
+	return joinFilters(filters)
+}
+
+// ListPromptVersions returns versions for a specific prompt.
+// Returns metadata only; use LoadPrompt with WithVersion for full template content.
+func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...ListVersionsOption) (*PromptVersionList, error) {
+	if name == "" {
+		return nil, fmt.Errorf("mlflow: prompt name is required")
+	}
+
+	listOpts := &listVersionsOptions{
+		maxResults: 100, // Default page size
+	}
+	for _, opt := range opts {
+		opt(listOpts)
+	}
+
+	query := url.Values{}
+	query.Set("filter", buildVersionsFilter(name, listOpts))
+
+	if listOpts.maxResults > 0 {
+		query.Set("max_results", strconv.Itoa(listOpts.maxResults))
+	}
+	if listOpts.pageToken != "" {
+		query.Set("page_token", listOpts.pageToken)
+	}
+	if len(listOpts.orderBy) > 0 {
+		for _, o := range listOpts.orderBy {
+			query.Add("order_by", o)
+		}
+	} else {
+		// Default: newest versions first
+		query.Set("order_by", "version_number DESC")
+	}
+
+	var resp struct {
+		ModelVersions []modelVersionJSON `json:"model_versions"`
+		NextPageToken string             `json:"next_page_token"`
+	}
+
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/search", query, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list prompt versions: %w", err)
+	}
+
+	result := &PromptVersionList{
+		Versions:      make([]Prompt, 0, len(resp.ModelVersions)),
+		NextPageToken: resp.NextPageToken,
+	}
+
+	for _, mv := range resp.ModelVersions {
+		result.Versions = append(result.Versions, mv.toPromptWithoutTemplate())
+	}
+
+	return result, nil
+}
+
+// buildVersionsFilter constructs the filter string for listing versions.
+func buildVersionsFilter(name string, opts *listVersionsOptions) string {
+	// Base filter: specific prompt name
+	filters := []string{fmt.Sprintf("name='%s'", name)}
+
+	// Add tag filters
+	for k, v := range opts.tagFilter {
+		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", k, v))
+	}
+
+	return joinFilters(filters)
+}
+
+// joinFilters joins filter conditions with AND.
+func joinFilters(filters []string) string {
+	if len(filters) == 0 {
+		return ""
+	}
+	if len(filters) == 1 {
+		return filters[0]
+	}
+	result := filters[0]
+	for _, f := range filters[1:] {
+		result += " AND " + f
+	}
+	return result
+}

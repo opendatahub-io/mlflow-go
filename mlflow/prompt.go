@@ -86,3 +86,46 @@ func (p *Prompt) WithTag(key, value string) *Prompt {
 	clone.Tags[key] = value
 	return clone
 }
+
+// PromptInfo represents prompt metadata from a listing operation.
+// Use LoadPrompt to get full Prompt with template content.
+type PromptInfo struct {
+	// Name is the prompt identifier in the registry.
+	Name string
+
+	// Description is the prompt description.
+	Description string
+
+	// LatestVersion is the highest version number, 0 if no versions exist.
+	LatestVersion int
+
+	// Tags are key-value metadata pairs.
+	Tags map[string]string
+
+	// CreatedAt is when the prompt was created.
+	CreatedAt time.Time
+
+	// UpdatedAt is when the prompt was last updated.
+	UpdatedAt time.Time
+}
+
+// PromptList contains prompts and a pagination token for the next page.
+type PromptList struct {
+	// Prompts is the list of prompt metadata in this page.
+	Prompts []PromptInfo
+
+	// NextPageToken is the token to fetch the next page.
+	// Empty if there are no more pages.
+	NextPageToken string
+}
+
+// PromptVersionList contains prompt versions and a pagination token.
+type PromptVersionList struct {
+	// Versions is the list of prompt versions in this page.
+	// Template field will be empty; use LoadPrompt with WithVersion to get full content.
+	Versions []Prompt
+
+	// NextPageToken is the token to fetch the next page.
+	// Empty if there are no more pages.
+	NextPageToken string
+}
