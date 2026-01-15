@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ederign/mlflow-go/internal/transport"
@@ -165,7 +166,7 @@ func (c *Client) findLatestVersion(ctx context.Context, name string) (int, error
 	}
 
 	query := url.Values{
-		"filter":      []string{fmt.Sprintf("name='%s'", name)},
+		"filter":      []string{fmt.Sprintf("name='%s'", escapeFilterValue(name))},
 		"order_by":    []string{"version_number DESC"},
 		"max_results": []string{"1"},
 	}
@@ -513,12 +514,12 @@ func buildPromptsFilter(opts *listPromptsOptions) string {
 
 	// Add name pattern if specified
 	if opts.nameFilter != "" {
-		filters = append(filters, fmt.Sprintf("name LIKE '%s'", opts.nameFilter))
+		filters = append(filters, fmt.Sprintf("name LIKE '%s'", escapeFilterValue(opts.nameFilter)))
 	}
 
 	// Add tag filters
 	for k, v := range opts.tagFilter {
-		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", k, v))
+		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", escapeFilterValue(k), escapeFilterValue(v)))
 	}
 
 	return joinFilters(filters)
@@ -581,14 +582,19 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 // buildVersionsFilter constructs the filter string for listing versions.
 func buildVersionsFilter(name string, opts *listVersionsOptions) string {
 	// Base filter: specific prompt name
-	filters := []string{fmt.Sprintf("name='%s'", name)}
+	filters := []string{fmt.Sprintf("name='%s'", escapeFilterValue(name))}
 
 	// Add tag filters
 	for k, v := range opts.tagFilter {
-		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", k, v))
+		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", escapeFilterValue(k), escapeFilterValue(v)))
 	}
 
 	return joinFilters(filters)
+}
+
+// escapeFilterValue escapes single quotes in filter values to prevent injection.
+func escapeFilterValue(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 // joinFilters joins filter conditions with AND.

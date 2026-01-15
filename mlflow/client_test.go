@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -599,7 +600,7 @@ func TestListPrompts_Success(t *testing.T) {
 
 		// Verify filter includes is_prompt tag
 		filter := r.URL.Query().Get("filter")
-		if filter == "" || !contains(filter, "mlflow.prompt.is_prompt") {
+		if filter == "" || !strings.Contains(filter, "mlflow.prompt.is_prompt") {
 			t.Errorf("filter should include is_prompt tag, got: %s", filter)
 		}
 
@@ -696,7 +697,7 @@ func TestListPrompts_WithNameFilter(t *testing.T) {
 		t.Fatalf("ListPrompts() error = %v", err)
 	}
 
-	if !contains(receivedFilter, "name LIKE 'greeting%'") {
+	if !strings.Contains(receivedFilter, "name LIKE 'greeting%'") {
 		t.Errorf("filter should include name pattern, got: %s", receivedFilter)
 	}
 }
@@ -781,7 +782,7 @@ func TestListPromptVersions_Success(t *testing.T) {
 
 		// Verify filter includes prompt name
 		filter := r.URL.Query().Get("filter")
-		if !contains(filter, "name='test-prompt'") {
+		if !strings.Contains(filter, "name='test-prompt'") {
 			t.Errorf("filter should include prompt name, got: %s", filter)
 		}
 
@@ -876,18 +877,4 @@ func TestListPromptVersions_EmptyName(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for empty name")
 	}
-}
-
-// contains checks if s contains substr
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

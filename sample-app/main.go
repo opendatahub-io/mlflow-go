@@ -80,7 +80,7 @@ func main() {
 		fmt.Printf("    - %s (latest: v%d)\n", info.Name, info.LatestVersion)
 	}
 	if promptList.NextPageToken != "" {
-		fmt.Printf("  (more prompts available, next page token: %s...)\n", promptList.NextPageToken[:20])
+		fmt.Println("  (more prompts available)")
 	}
 
 	// === Path 5: ListPromptVersions - List versions of our prompt ===
@@ -109,4 +109,3 @@ func printPrompt(p *mlflow.Prompt) {
 		fmt.Printf("  Created:     %s\n", p.CreatedAt.Format(time.RFC3339))
 	}
 }
-
