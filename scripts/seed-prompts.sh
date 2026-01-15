@@ -24,18 +24,21 @@ echo "Seeding prompts to ${MLFLOW_URI}..."
 jq -c '.prompts[]' "${TESTDATA}" | while read -r prompt; do
     name=$(echo "${prompt}" | jq -r '.name')
     description=$(echo "${prompt}" | jq -r '.description // ""')
+    use_case=$(echo "${prompt}" | jq -r '.use_case // ""')
 
-    echo "  Creating prompt: ${name}"
+    echo "  Creating prompt: ${name} (use_case: ${use_case})"
 
-    # Create RegisteredModel with prompt tag (ignore error if already exists)
+    # Create RegisteredModel with prompt tag and use_case (ignore error if already exists)
     create_model_payload=$(jq -n \
         --arg name "$name" \
         --arg desc "$description" \
+        --arg use_case "$use_case" \
         '{
             name: $name,
             description: $desc,
             tags: [
-                {key: "mlflow.prompt.is_prompt", value: "true"}
+                {key: "mlflow.prompt.is_prompt", value: "true"},
+                {key: "use_case", value: $use_case}
             ]
         }')
 
