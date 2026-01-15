@@ -277,6 +277,7 @@ func (c *Client) createModelVersion(ctx context.Context, name, template string, 
 	tags := []modelVersionTag{
 		{Key: tagPromptText, Value: template},
 		{Key: tagPromptType, Value: "text"},
+		{Key: tagIsPrompt, Value: "true"},
 	}
 
 	// Add user-provided tags
