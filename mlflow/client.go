@@ -102,6 +102,10 @@ func (c *Client) IsInsecure() bool {
 // LoadPrompt loads a prompt from the registry by name.
 // If no version is specified via WithVersion, loads the latest version.
 func (c *Client) LoadPrompt(ctx context.Context, name string, opts ...LoadOption) (*Prompt, error) {
+	if name == "" {
+		return nil, fmt.Errorf("mlflow: prompt name is required")
+	}
+
 	loadOpts := &loadOptions{}
 	for _, opt := range opts {
 		opt(loadOpts)
@@ -132,16 +136,55 @@ func (c *Client) loadLatestPrompt(ctx context.Context, name string) (*Prompt, er
 		return nil, fmt.Errorf("failed to get prompt: %w", err)
 	}
 
-	// Find the latest version number
-	latestVersion := 1
+	// Try to find the latest version from the registered model response
+	latestVersion := 0
 	if len(getModelResp.RegisteredModel.LatestVersions) > 0 {
 		v := getModelResp.RegisteredModel.LatestVersions[0].Version
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+		if parsed, parseErr := strconv.Atoi(v); parseErr == nil && parsed > 0 {
 			latestVersion = parsed
 		}
 	}
 
+	// If latest_versions is empty, search for versions directly
+	if latestVersion == 0 {
+		latestVersion, err = c.findLatestVersion(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return c.loadPromptVersion(ctx, name, latestVersion)
+}
+
+// findLatestVersion searches for the highest version number of a prompt.
+func (c *Client) findLatestVersion(ctx context.Context, name string) (int, error) {
+	var searchResp struct {
+		ModelVersions []struct {
+			Version string `json:"version"`
+		} `json:"model_versions"`
+	}
+
+	query := url.Values{
+		"filter":      []string{fmt.Sprintf("name='%s'", name)},
+		"order_by":    []string{"version_number DESC"},
+		"max_results": []string{"1"},
+	}
+
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/search", query, &searchResp)
+	if err != nil {
+		return 0, fmt.Errorf("failed to search versions: %w", err)
+	}
+
+	if len(searchResp.ModelVersions) == 0 {
+		return 0, fmt.Errorf("prompt %q has no versions", name)
+	}
+
+	version, err := strconv.Atoi(searchResp.ModelVersions[0].Version)
+	if err != nil || version <= 0 {
+		return 0, fmt.Errorf("invalid version number for prompt %q", name)
+	}
+
+	return version, nil
 }
 
 // loadPromptVersion loads a specific version of a prompt.
@@ -230,6 +273,13 @@ func (mv *modelVersionJSON) toPrompt() *Prompt {
 // If the prompt doesn't exist, it creates a new one with version 1.
 // If the prompt exists, it creates a new version.
 func (c *Client) RegisterPrompt(ctx context.Context, name, template string, opts ...RegisterOption) (*Prompt, error) {
+	if name == "" {
+		return nil, fmt.Errorf("mlflow: prompt name is required")
+	}
+	if template == "" {
+		return nil, fmt.Errorf("mlflow: prompt template is required")
+	}
+
 	regOpts := &registerOptions{}
 	for _, opt := range opts {
 		opt(regOpts)

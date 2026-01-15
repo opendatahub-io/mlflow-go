@@ -149,6 +149,48 @@ func TestNewClient_InvalidURI(t *testing.T) {
 	}
 }
 
+func TestLoadPrompt_EmptyName(t *testing.T) {
+	client, err := NewClient(
+		WithTrackingURI("https://mlflow.example.com"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.LoadPrompt(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+func TestRegisterPrompt_EmptyName(t *testing.T) {
+	client, err := NewClient(
+		WithTrackingURI("https://mlflow.example.com"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.RegisterPrompt(context.Background(), "", "template")
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+func TestRegisterPrompt_EmptyTemplate(t *testing.T) {
+	client, err := NewClient(
+		WithTrackingURI("https://mlflow.example.com"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.RegisterPrompt(context.Background(), "my-prompt", "")
+	if err == nil {
+		t.Error("expected error for empty template")
+	}
+}
+
 func TestLoadPrompt_Success(t *testing.T) {
 	// Create test server that simulates MLflow API
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -292,6 +334,35 @@ func TestLoadPrompt_NotFound(t *testing.T) {
 	}
 	if !IsNotFound(err) {
 		t.Errorf("expected IsNotFound, got %v", err)
+	}
+}
+
+func TestLoadPrompt_NoVersions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_model": map[string]any{
+				"name":            "empty-prompt",
+				"latest_versions": []any{},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.LoadPrompt(context.Background(), "empty-prompt")
+	if err == nil {
+		t.Error("expected error for prompt with no versions")
+	}
+	if err.Error() != `prompt "empty-prompt" has no versions` {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
 

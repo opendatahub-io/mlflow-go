@@ -221,6 +221,27 @@ func TestNew_CustomTimeout(t *testing.T) {
 	}
 }
 
+func TestClient_TimeoutExceeded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client, err := New(Config{
+		BaseURL: server.URL,
+		Timeout: 50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	err = client.Get(context.Background(), "/api/test", nil, nil)
+	if err == nil {
+		t.Error("expected timeout error")
+	}
+}
+
 func TestClient_NoAuthHeader_WhenNoToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if auth := r.Header.Get("Authorization"); auth != "" {

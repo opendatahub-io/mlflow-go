@@ -40,6 +40,8 @@ func WithToken(token string) Option {
 
 // WithHTTPClient sets a custom HTTP client.
 // Use this to configure timeouts, TLS, or proxies.
+// When a custom client is provided, WithTimeout is ignored;
+// configure the timeout directly on the provided client.
 func WithHTTPClient(client *http.Client) Option {
 	return func(o *options) {
 		o.httpClient = client
