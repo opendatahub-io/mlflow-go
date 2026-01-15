@@ -1,7 +1,7 @@
 # ABOUTME: Build and development automation for the MLflow Go SDK.
 # ABOUTME: Provides targets for testing, code generation, and local MLflow server management.
 
-.PHONY: test/unit test/integration gen dev/up dev/down dev/reset help lint vet fmt tidy check run-sample
+.PHONY: test/unit test/integration gen dev/up dev/down dev/reset dev/seed help lint vet fmt tidy check run-sample
 
 # Configuration
 MLFLOW_PORT ?= 5000
@@ -30,7 +30,8 @@ help:
 	@echo "Development:"
 	@echo "  make dev/up           - Start local MLflow server (foreground, Ctrl+C to stop)"
 	@echo "  make dev/down         - Stop local MLflow server"
-	@echo "  make dev/reset        - Reset MLflow server (nuke DB, restart, seed)"
+	@echo "  make dev/seed         - Seed sample prompts (Bella and Dora!) into running server"
+	@echo "  make dev/reset        - Nuke MLflow data (run dev/up + dev/seed after)"
 	@echo ""
 	@echo "Code Generation:"
 	@echo "  make gen              - Generate protobuf types from MLflow protos"
@@ -114,10 +115,12 @@ dev/down:
 dev/reset: dev/down
 	@echo "Nuking MLflow data..."
 	@rm -rf $(MLFLOW_DATA)
-	@$(MAKE) dev/up
-	@echo "Seeding sample prompts..."
-	@./scripts/seed-prompts.sh || echo "Note: seed script not yet created"
-	@echo "MLflow reset complete."
+	@echo "Done! Now run: make dev/up (in one terminal) then make dev/seed (in another)"
+
+dev/seed:
+	@echo "Seeding sample prompts (featuring Bella and Dora!)..."
+	@./scripts/seed-prompts.sh
+	@echo "Seeding complete!"
 
 # Sample app
 run-sample:

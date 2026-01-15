@@ -49,11 +49,12 @@ jq -c '.prompts[]' "${TESTDATA}" | while read -r prompt; do
         template=$(echo "${version}" | jq -r '.template')
         ver_description=$(echo "${version}" | jq -r '.description // ""')
 
-        # Build tags array including the template
+        # Build tags array including the template and is_prompt marker
         tags=$(echo "${version}" | jq -c --arg template "$template" '
             [
                 {key: "mlflow.prompt.text", value: $template},
-                {key: "_mlflow_prompt_type", value: "text"}
+                {key: "_mlflow_prompt_type", value: "text"},
+                {key: "mlflow.prompt.is_prompt", value: "true"}
             ] + (.tags // [])
         ')
 
@@ -88,7 +89,7 @@ echo "Seeding complete. Verifying..."
 # Verify prompts were created
 echo ""
 echo "Registered prompts:"
-for pname in greeting-prompt qa-prompt; do
+for pname in greeting-prompt dog-walker-prompt qa-prompt; do
     result=$(curl -s "${MLFLOW_URI}/api/2.0/mlflow/registered-models/get?name=${pname}" 2>/dev/null)
     if echo "${result}" | jq -e '.registered_model' >/dev/null 2>&1; then
         versions=$(echo "${result}" | jq -r '.registered_model.latest_versions | length // 0')
