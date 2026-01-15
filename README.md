@@ -257,7 +257,7 @@ mlflow-go/
 ├── internal/            # Internal packages
 │   ├── errors/          # APIError implementation
 │   └── transport/       # HTTP client
-├── examples/            # Usage examples
+├── sample-app/          # Demo application
 └── specs/               # Design documentation
 ```
 
