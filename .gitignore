@@ -34,6 +34,7 @@ dist/
 
 # MLflow local development data
 .mlflow/
+.mlflow-test/
 
 # Claude
 .claude/
