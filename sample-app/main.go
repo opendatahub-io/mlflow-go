@@ -1,5 +1,5 @@
 // ABOUTME: Sample application demonstrating the MLflow Go SDK.
-// ABOUTME: Exercises RegisterPrompt, LoadPrompt, and LoadPrompt with specific version.
+// ABOUTME: Exercises RegisterPrompt, LoadPrompt, ListPrompts, and ListPromptVersions.
 
 package main
 
@@ -68,6 +68,31 @@ func main() {
 		log.Fatalf("Failed to load prompt version 1: %v", err)
 	}
 	printPrompt(v1Prompt)
+
+	// === Path 4: ListPrompts - List all prompts ===
+	fmt.Println("\n=== 4. ListPrompts: Listing all prompts ===")
+	promptList, err := client.ListPrompts(ctx, mlflow.WithMaxResults(5))
+	if err != nil {
+		log.Fatalf("Failed to list prompts: %v", err)
+	}
+	fmt.Printf("  Found %d prompts:\n", len(promptList.Prompts))
+	for _, info := range promptList.Prompts {
+		fmt.Printf("    - %s (latest: v%d)\n", info.Name, info.LatestVersion)
+	}
+	if promptList.NextPageToken != "" {
+		fmt.Printf("  (more prompts available, next page token: %s...)\n", promptList.NextPageToken[:20])
+	}
+
+	// === Path 5: ListPromptVersions - List versions of our prompt ===
+	fmt.Println("\n=== 5. ListPromptVersions: Listing versions of our prompt ===")
+	versionList, err := client.ListPromptVersions(ctx, promptName)
+	if err != nil {
+		log.Fatalf("Failed to list prompt versions: %v", err)
+	}
+	fmt.Printf("  Found %d versions of %s:\n", len(versionList.Versions), promptName)
+	for _, v := range versionList.Versions {
+		fmt.Printf("    - v%d: %s\n", v.Version, v.Description)
+	}
 
 	fmt.Println("\n=== All operations completed successfully! ===")
 }
