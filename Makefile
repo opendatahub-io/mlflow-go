@@ -42,7 +42,7 @@ help:
 
 # Testing targets
 test/unit:
-	go test -v -race ./... -tags=!integration
+	go test -v -race ./...
 
 test/integration:
 	MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) \

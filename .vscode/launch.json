@@ -19,7 +19,6 @@
       "request": "launch",
       "mode": "test",
       "program": "${workspaceFolder}/mlflow",
-      "buildFlags": "-tags=!integration",
       "args": ["-test.v"],
       "cwd": "${workspaceFolder}"
     },
