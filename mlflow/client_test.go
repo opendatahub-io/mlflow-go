@@ -27,8 +27,14 @@ func TestNewClient_WithTrackingURI(t *testing.T) {
 }
 
 func TestNewClient_MissingTrackingURI(t *testing.T) {
-	// Clear env var to ensure it's not set
+	// Save and restore env var
+	saved := os.Getenv("MLFLOW_TRACKING_URI")
 	os.Unsetenv("MLFLOW_TRACKING_URI")
+	defer func() {
+		if saved != "" {
+			os.Setenv("MLFLOW_TRACKING_URI", saved)
+		}
+	}()
 
 	_, err := NewClient()
 	if err == nil {
@@ -37,8 +43,15 @@ func TestNewClient_MissingTrackingURI(t *testing.T) {
 }
 
 func TestNewClient_FromEnvVar(t *testing.T) {
+	saved := os.Getenv("MLFLOW_TRACKING_URI")
 	os.Setenv("MLFLOW_TRACKING_URI", "https://mlflow.test.com")
-	defer os.Unsetenv("MLFLOW_TRACKING_URI")
+	defer func() {
+		if saved != "" {
+			os.Setenv("MLFLOW_TRACKING_URI", saved)
+		} else {
+			os.Unsetenv("MLFLOW_TRACKING_URI")
+		}
+	}()
 
 	client, err := NewClient()
 	if err != nil {
@@ -51,8 +64,15 @@ func TestNewClient_FromEnvVar(t *testing.T) {
 }
 
 func TestNewClient_ExplicitOverridesEnv(t *testing.T) {
+	saved := os.Getenv("MLFLOW_TRACKING_URI")
 	os.Setenv("MLFLOW_TRACKING_URI", "https://env.example.com")
-	defer os.Unsetenv("MLFLOW_TRACKING_URI")
+	defer func() {
+		if saved != "" {
+			os.Setenv("MLFLOW_TRACKING_URI", saved)
+		} else {
+			os.Unsetenv("MLFLOW_TRACKING_URI")
+		}
+	}()
 
 	client, err := NewClient(
 		WithTrackingURI("https://explicit.example.com"),
@@ -68,6 +88,15 @@ func TestNewClient_ExplicitOverridesEnv(t *testing.T) {
 }
 
 func TestNewClient_HTTPRejectedByDefault(t *testing.T) {
+	// Save and restore insecure env var
+	savedInsecure := os.Getenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
+	os.Unsetenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
+	defer func() {
+		if savedInsecure != "" {
+			os.Setenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY", savedInsecure)
+		}
+	}()
+
 	_, err := NewClient(
 		WithTrackingURI("http://mlflow.example.com"),
 	)
@@ -91,8 +120,15 @@ func TestNewClient_HTTPAllowedWithInsecure(t *testing.T) {
 }
 
 func TestNewClient_HTTPAllowedWithEnvVar(t *testing.T) {
+	saved := os.Getenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
 	os.Setenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY", "true")
-	defer os.Unsetenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
+	defer func() {
+		if saved != "" {
+			os.Setenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY", saved)
+		} else {
+			os.Unsetenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
+		}
+	}()
 
 	client, err := NewClient(
 		WithTrackingURI("http://localhost:5000"),
@@ -107,8 +143,15 @@ func TestNewClient_HTTPAllowedWithEnvVar(t *testing.T) {
 }
 
 func TestNewClient_InsecureEnvVar_One(t *testing.T) {
+	saved := os.Getenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
 	os.Setenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY", "1")
-	defer os.Unsetenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
+	defer func() {
+		if saved != "" {
+			os.Setenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY", saved)
+		} else {
+			os.Unsetenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY")
+		}
+	}()
 
 	client, err := NewClient(
 		WithTrackingURI("http://localhost:5000"),
@@ -123,11 +166,21 @@ func TestNewClient_InsecureEnvVar_One(t *testing.T) {
 }
 
 func TestNewClient_TokenFromEnv(t *testing.T) {
+	savedURI := os.Getenv("MLFLOW_TRACKING_URI")
+	savedToken := os.Getenv("MLFLOW_TRACKING_TOKEN")
 	os.Setenv("MLFLOW_TRACKING_URI", "https://mlflow.example.com")
 	os.Setenv("MLFLOW_TRACKING_TOKEN", "secret-token")
 	defer func() {
-		os.Unsetenv("MLFLOW_TRACKING_URI")
-		os.Unsetenv("MLFLOW_TRACKING_TOKEN")
+		if savedURI != "" {
+			os.Setenv("MLFLOW_TRACKING_URI", savedURI)
+		} else {
+			os.Unsetenv("MLFLOW_TRACKING_URI")
+		}
+		if savedToken != "" {
+			os.Setenv("MLFLOW_TRACKING_TOKEN", savedToken)
+		} else {
+			os.Unsetenv("MLFLOW_TRACKING_TOKEN")
+		}
 	}()
 
 	client, err := NewClient()
@@ -771,30 +824,30 @@ func TestListPrompts_Empty(t *testing.T) {
 }
 
 func TestListPromptVersions_Success(t *testing.T) {
+	// The implementation fetches versions individually due to MLflow OSS limitation
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		if r.URL.Path != "/api/2.0/mlflow/model-versions/search" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
+		switch r.URL.Path {
+		case "/api/2.0/mlflow/model-versions/search":
+			// MLflow OSS returns empty for search (simulating the bug)
+			json.NewEncoder(w).Encode(map[string]any{})
 
-		// Verify filter includes prompt name
-		filter := r.URL.Query().Get("filter")
-		if !strings.Contains(filter, "name='test-prompt'") {
-			t.Errorf("filter should include prompt name, got: %s", filter)
-		}
+		case "/api/2.0/mlflow/registered-models/get":
+			// Return the model with latest version info
+			json.NewEncoder(w).Encode(map[string]any{
+				"registered_model": map[string]any{
+					"name": "test-prompt",
+					"latest_versions": []map[string]any{
+						{"version": "3"},
+					},
+				},
+			})
 
-		// Verify default ordering
-		orderBy := r.URL.Query().Get("order_by")
-		if orderBy != "version_number DESC" {
-			t.Errorf("order_by = %q, want %q", orderBy, "version_number DESC")
-		}
-
-		json.NewEncoder(w).Encode(map[string]any{
-			"model_versions": []map[string]any{
-				{
+		case "/api/2.0/mlflow/model-versions/get":
+			version := r.URL.Query().Get("version")
+			versionData := map[string]map[string]any{
+				"3": {
 					"name":                   "test-prompt",
 					"version":                "3",
 					"description":            "Version 3",
@@ -805,7 +858,7 @@ func TestListPromptVersions_Success(t *testing.T) {
 						{"key": "author", "value": "alice"},
 					},
 				},
-				{
+				"2": {
 					"name":               "test-prompt",
 					"version":            "2",
 					"description":        "Version 2",
@@ -814,7 +867,7 @@ func TestListPromptVersions_Success(t *testing.T) {
 						{"key": "mlflow.prompt.text", "value": "Template v2"},
 					},
 				},
-				{
+				"1": {
 					"name":               "test-prompt",
 					"version":            "1",
 					"description":        "Version 1",
@@ -823,9 +876,17 @@ func TestListPromptVersions_Success(t *testing.T) {
 						{"key": "mlflow.prompt.text", "value": "Template v1"},
 					},
 				},
-			},
-			"next_page_token": "",
-		})
+			}
+			if data, ok := versionData[version]; ok {
+				json.NewEncoder(w).Encode(map[string]any{"model_version": data})
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				json.NewEncoder(w).Encode(map[string]string{"error_code": "RESOURCE_DOES_NOT_EXIST"})
+			}
+
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer server.Close()
 
@@ -846,7 +907,7 @@ func TestListPromptVersions_Success(t *testing.T) {
 		t.Errorf("got %d versions, want 3", len(result.Versions))
 	}
 
-	// Verify versions are returned (newest first due to default ordering)
+	// Verify versions are returned newest first
 	if result.Versions[0].Version != 3 {
 		t.Errorf("first version = %d, want 3", result.Versions[0].Version)
 	}

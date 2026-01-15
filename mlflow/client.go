@@ -527,69 +527,81 @@ func buildPromptsFilter(opts *listPromptsOptions) string {
 
 // ListPromptVersions returns versions for a specific prompt.
 // Returns metadata only; use LoadPrompt with WithVersion for full template content.
+//
+// Note: Due to a limitation in MLflow OSS model-versions/search endpoint,
+// this method fetches versions individually. Pagination options are ignored.
 func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...ListVersionsOption) (*PromptVersionList, error) {
 	if name == "" {
 		return nil, fmt.Errorf("mlflow: prompt name is required")
 	}
 
+	// Apply options (maxResults used to limit results)
 	listOpts := &listVersionsOptions{
-		maxResults: 100, // Default page size
+		maxResults: 100,
 	}
 	for _, opt := range opts {
 		opt(listOpts)
 	}
 
-	query := url.Values{}
-	query.Set("filter", buildVersionsFilter(name, listOpts))
-
-	if listOpts.maxResults > 0 {
-		query.Set("max_results", strconv.Itoa(listOpts.maxResults))
-	}
-	if listOpts.pageToken != "" {
-		query.Set("page_token", listOpts.pageToken)
-	}
-	if len(listOpts.orderBy) > 0 {
-		for _, o := range listOpts.orderBy {
-			query.Add("order_by", o)
-		}
-	} else {
-		// Default: newest versions first
-		query.Set("order_by", "version_number DESC")
-	}
-
-	var resp struct {
-		ModelVersions []modelVersionJSON `json:"model_versions"`
-		NextPageToken string             `json:"next_page_token"`
-	}
-
-	err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/search", query, &resp)
+	// Get the registered model to find the latest version number
+	latestVersion, err := c.findLatestVersion(ctx, name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list prompt versions: %w", err)
+		// If findLatestVersion fails, try getting the model directly
+		var getModelResp struct {
+			RegisteredModel struct {
+				LatestVersions []struct {
+					Version string `json:"version"`
+				} `json:"latest_versions"`
+			} `json:"registered_model"`
+		}
+
+		query := url.Values{"name": []string{name}}
+		if getErr := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &getModelResp); getErr != nil {
+			return nil, fmt.Errorf("failed to get prompt: %w", getErr)
+		}
+
+		if len(getModelResp.RegisteredModel.LatestVersions) > 0 {
+			if v, parseErr := strconv.Atoi(getModelResp.RegisteredModel.LatestVersions[0].Version); parseErr == nil {
+				latestVersion = v
+			}
+		}
+
+		if latestVersion == 0 {
+			return &PromptVersionList{Versions: []Prompt{}}, nil
+		}
 	}
 
+	// Fetch each version individually (workaround for broken search endpoint)
 	result := &PromptVersionList{
-		Versions:      make([]Prompt, 0, len(resp.ModelVersions)),
-		NextPageToken: resp.NextPageToken,
+		Versions: make([]Prompt, 0, latestVersion),
 	}
 
-	for _, mv := range resp.ModelVersions {
-		result.Versions = append(result.Versions, mv.toPromptWithoutTemplate())
+	for v := latestVersion; v >= 1; v-- {
+		if listOpts.maxResults > 0 && len(result.Versions) >= listOpts.maxResults {
+			break
+		}
+
+		var resp struct {
+			ModelVersion modelVersionJSON `json:"model_version"`
+		}
+
+		query := url.Values{
+			"name":    []string{name},
+			"version": []string{strconv.Itoa(v)},
+		}
+
+		err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/get", query, &resp)
+		if err != nil {
+			if IsNotFound(err) {
+				continue // Version might have been deleted
+			}
+			return nil, fmt.Errorf("failed to get version %d: %w", v, err)
+		}
+
+		result.Versions = append(result.Versions, resp.ModelVersion.toPromptWithoutTemplate())
 	}
 
 	return result, nil
-}
-
-// buildVersionsFilter constructs the filter string for listing versions.
-func buildVersionsFilter(name string, opts *listVersionsOptions) string {
-	// Base filter: specific prompt name
-	filters := []string{fmt.Sprintf("name='%s'", escapeFilterValue(name))}
-
-	// Add tag filters
-	for k, v := range opts.tagFilter {
-		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", escapeFilterValue(k), escapeFilterValue(v)))
-	}
-
-	return joinFilters(filters)
 }
 
 // escapeFilterValue escapes single quotes in filter values to prevent injection.

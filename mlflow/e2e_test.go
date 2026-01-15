@@ -187,3 +187,155 @@ func TestE2E_LoadWithTags(t *testing.T) {
 		t.Error("Template tag should not be in user tags")
 	}
 }
+
+// TestE2E_ListPrompts tests listing all prompts.
+func TestE2E_ListPrompts(t *testing.T) {
+	client, err := NewClient(WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Create a unique prompt to ensure we have at least one
+	promptName := fmt.Sprintf("e2e-list-test-%d", time.Now().UnixNano())
+	_, err = client.RegisterPrompt(ctx, promptName, "List test template")
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	// List all prompts
+	list, err := client.ListPrompts(ctx)
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if len(list.Prompts) == 0 {
+		t.Error("Expected at least one prompt")
+	}
+
+	// Find our prompt in the list
+	found := false
+	for _, p := range list.Prompts {
+		if p.Name == promptName {
+			found = true
+			if p.LatestVersion < 1 {
+				t.Errorf("LatestVersion = %d, want >= 1", p.LatestVersion)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("Created prompt %s not found in list", promptName)
+	}
+
+	t.Logf("Listed %d prompts", len(list.Prompts))
+}
+
+// TestE2E_ListPromptsWithFilter tests listing prompts with name filter.
+func TestE2E_ListPromptsWithFilter(t *testing.T) {
+	client, err := NewClient(WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Create prompts with a unique prefix
+	prefix := fmt.Sprintf("e2e-filter-%d", time.Now().UnixNano())
+	_, err = client.RegisterPrompt(ctx, prefix+"-alpha", "Alpha template")
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+	_, err = client.RegisterPrompt(ctx, prefix+"-beta", "Beta template")
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	// List with name filter
+	list, err := client.ListPrompts(ctx, WithNameFilter(prefix+"%"))
+	if err != nil {
+		t.Fatalf("ListPrompts() with filter error = %v", err)
+	}
+
+	if len(list.Prompts) < 2 {
+		t.Errorf("Expected at least 2 prompts matching filter, got %d", len(list.Prompts))
+	}
+
+	// Verify all results match the filter
+	for _, p := range list.Prompts {
+		if len(p.Name) < len(prefix) || p.Name[:len(prefix)] != prefix {
+			t.Errorf("Prompt %s doesn't match filter %s%%", p.Name, prefix)
+		}
+	}
+
+	t.Logf("Filtered list returned %d prompts", len(list.Prompts))
+}
+
+// TestE2E_ListPromptVersions tests listing versions of a prompt.
+func TestE2E_ListPromptVersions(t *testing.T) {
+	client, err := NewClient(WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Create a prompt with multiple versions
+	promptName := fmt.Sprintf("e2e-versions-test-%d", time.Now().UnixNano())
+
+	_, err = client.RegisterPrompt(ctx, promptName, "Version 1 template",
+		WithDescription("First version"))
+	if err != nil {
+		t.Fatalf("RegisterPrompt() v1 error = %v", err)
+	}
+
+	_, err = client.RegisterPrompt(ctx, promptName, "Version 2 template",
+		WithDescription("Second version"))
+	if err != nil {
+		t.Fatalf("RegisterPrompt() v2 error = %v", err)
+	}
+
+	_, err = client.RegisterPrompt(ctx, promptName, "Version 3 template",
+		WithDescription("Third version"))
+	if err != nil {
+		t.Fatalf("RegisterPrompt() v3 error = %v", err)
+	}
+
+	// List versions
+	versions, err := client.ListPromptVersions(ctx, promptName)
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	if len(versions.Versions) != 3 {
+		t.Errorf("Expected 3 versions, got %d", len(versions.Versions))
+	}
+
+	// Verify order (newest first)
+	if len(versions.Versions) >= 3 {
+		if versions.Versions[0].Version != 3 {
+			t.Errorf("First version = %d, want 3 (newest first)", versions.Versions[0].Version)
+		}
+		if versions.Versions[2].Version != 1 {
+			t.Errorf("Last version = %d, want 1", versions.Versions[2].Version)
+		}
+	}
+
+	// Verify descriptions are present
+	for _, v := range versions.Versions {
+		if v.Description == "" {
+			t.Errorf("Version %d has empty description", v.Version)
+		}
+	}
+
+	// Template should be empty in listing (use LoadPrompt to get full content)
+	for _, v := range versions.Versions {
+		if v.Template != "" {
+			t.Errorf("Version %d should have empty Template in listing, got %q", v.Version, v.Template)
+		}
+	}
+
+	t.Logf("Listed %d versions of %s", len(versions.Versions), promptName)
+}

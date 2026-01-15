@@ -1,7 +1,7 @@
 # ABOUTME: Build and development automation for the MLflow Go SDK.
 # ABOUTME: Provides targets for testing, code generation, and local MLflow server management.
 
-.PHONY: test/unit test/integration gen dev/up dev/down dev/reset dev/seed help lint vet fmt tidy check run-sample
+.PHONY: test/unit test/integration test/integration-ci gen dev/up dev/down dev/reset dev/seed help lint vet fmt tidy check run-sample
 
 # Configuration
 MLFLOW_PORT ?= 5000
@@ -18,7 +18,8 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test/unit        - Run unit tests with race detector"
-	@echo "  make test/integration - Run integration tests (run dev/up in another terminal)"
+	@echo "  make test/integration - Run integration tests (requires dev/up in another terminal)"
+	@echo "  make test/integration-ci - Run integration tests (auto-starts/stops MLflow, for CI/CD)"
 	@echo "  make check            - Run all checks (lint, vet, test)"
 	@echo ""
 	@echo "Linting:"
@@ -46,7 +47,33 @@ test/unit:
 test/integration:
 	MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
-	go test -v -race -tags=integration ./...
+	go test -v -race -tags=integration ./mlflow/...
+
+# CI/CD integration test target - starts MLflow, runs tests, stops MLflow
+test/integration-ci: $(UV)
+	@echo "Starting MLflow server in background..."
+	@mkdir -p $(MLFLOW_DATA)
+	@$(UV) run --with mlflow mlflow server \
+		--host 127.0.0.1 \
+		--port $(MLFLOW_PORT) \
+		--backend-store-uri sqlite:///$(MLFLOW_DATA)/mlflow.db \
+		--default-artifact-root $(MLFLOW_DATA)/artifacts &
+	@echo "Waiting for MLflow to be ready..."
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		if curl -s http://localhost:$(MLFLOW_PORT)/health > /dev/null 2>&1; then \
+			echo "MLflow is ready!"; \
+			break; \
+		fi; \
+		echo "Waiting... ($$i/10)"; \
+		sleep 2; \
+	done
+	@echo "Running integration tests..."
+	@MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) \
+	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
+	go test -v -race -tags=integration ./mlflow/... || ($(MAKE) dev/down && exit 1)
+	@echo "Stopping MLflow server..."
+	@$(MAKE) dev/down
+	@echo "Integration tests completed!"
 
 # Linting targets
 $(GOLANGCI_LINT):
