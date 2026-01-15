@@ -133,7 +133,14 @@ if err != nil {
 for _, v := range versions.Versions {
     fmt.Printf("v%d: %s\n", v.Version, v.Description)
 }
+
+// Limit results
+versions, err = client.ListPromptVersions(ctx, "my-prompt",
+    mlflow.WithVersionsMaxResults(10),
+)
 ```
+
+> **Note**: Due to a limitation in MLflow OSS, `ListPromptVersions` fetches versions individually. Only `WithVersionsMaxResults` is supported; pagination and tag filtering options are ignored.
 
 ### Register a New Prompt
 

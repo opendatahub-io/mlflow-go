@@ -823,6 +823,129 @@ func TestListPrompts_Empty(t *testing.T) {
 	}
 }
 
+func TestListPrompts_WithTagFilter(t *testing.T) {
+	var receivedFilter string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		receivedFilter = r.URL.Query().Get("filter")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.ListPrompts(context.Background(),
+		WithTagFilter(map[string]string{"team": "ml", "env": "prod"}),
+	)
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	// Should include tag filters in the filter string
+	if !strings.Contains(receivedFilter, "tags.`team` = 'ml'") {
+		t.Errorf("filter should include team tag, got: %s", receivedFilter)
+	}
+	if !strings.Contains(receivedFilter, "tags.`env` = 'prod'") {
+		t.Errorf("filter should include env tag, got: %s", receivedFilter)
+	}
+}
+
+func TestListPrompts_WithOrderBy(t *testing.T) {
+	var receivedOrderBy string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		receivedOrderBy = r.URL.Query().Get("order_by")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	_, err = client.ListPrompts(context.Background(),
+		WithOrderBy("name ASC", "timestamp DESC"),
+	)
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if !strings.Contains(receivedOrderBy, "name ASC") {
+		t.Errorf("order_by should include 'name ASC', got: %s", receivedOrderBy)
+	}
+}
+
+func TestListPromptVersions_WithMaxResults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api/2.0/mlflow/registered-models/get":
+			json.NewEncoder(w).Encode(map[string]any{
+				"registered_model": map[string]any{
+					"name": "test-prompt",
+					"latest_versions": []map[string]any{
+						{"version": "5"},
+					},
+				},
+			})
+
+		case "/api/2.0/mlflow/model-versions/get":
+			version := r.URL.Query().Get("version")
+			json.NewEncoder(w).Encode(map[string]any{
+				"model_version": map[string]any{
+					"name":        "test-prompt",
+					"version":     version,
+					"description": "Version " + version,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template"},
+					},
+				},
+			})
+
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(
+		WithTrackingURI(server.URL),
+		WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	// Request only 2 versions (of 5 available)
+	result, err := client.ListPromptVersions(context.Background(), "test-prompt",
+		WithVersionsMaxResults(2),
+	)
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	if len(result.Versions) != 2 {
+		t.Errorf("got %d versions, want 2 (maxResults)", len(result.Versions))
+	}
+}
+
 func TestListPromptVersions_Success(t *testing.T) {
 	// The implementation fetches versions individually due to MLflow OSS limitation
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
