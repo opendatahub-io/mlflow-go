@@ -18,7 +18,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test/unit        - Run unit tests with race detector"
-	@echo "  make test/integration - Run integration tests (requires dev/up)"
+	@echo "  make test/integration - Run integration tests (run dev/up in another terminal)"
 	@echo "  make check            - Run all checks (lint, vet, test)"
 	@echo ""
 	@echo "Linting:"
@@ -28,7 +28,7 @@ help:
 	@echo "  make tidy             - Run go mod tidy"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev/up           - Start local MLflow server"
+	@echo "  make dev/up           - Start local MLflow server (foreground, Ctrl+C to stop)"
 	@echo "  make dev/down         - Stop local MLflow server"
 	@echo "  make dev/reset        - Reset MLflow server (nuke DB, restart, seed)"
 	@echo ""
@@ -42,7 +42,7 @@ help:
 test/unit:
 	go test -v -race ./... -tags=!integration
 
-test/integration: dev/up
+test/integration:
 	MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
 	go test -v -race -tags=integration ./...
@@ -99,15 +99,12 @@ $(UV):
 # Development server targets
 dev/up: $(UV)
 	@mkdir -p $(MLFLOW_DATA)
-	@echo "Starting MLflow server on port $(MLFLOW_PORT)..."
-	@$(UV) run --with mlflow mlflow server \
+	@echo "Starting MLflow server on port $(MLFLOW_PORT)... (Ctrl+C to stop)"
+	$(UV) run --with mlflow mlflow server \
 		--host 127.0.0.1 \
 		--port $(MLFLOW_PORT) \
 		--backend-store-uri sqlite:///$(MLFLOW_DATA)/mlflow.db \
-		--default-artifact-root $(MLFLOW_DATA)/artifacts &
-	@echo "Waiting for MLflow to start..."
-	@sleep 3
-	@curl -s http://localhost:$(MLFLOW_PORT)/health > /dev/null && echo "MLflow is ready!" || echo "MLflow may still be starting..."
+		--default-artifact-root $(MLFLOW_DATA)/artifacts
 
 dev/down:
 	@echo "Stopping MLflow server..."
