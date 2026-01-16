@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/opendatahub-io/mlflow-go/internal/errors"
+	"github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb"
 	"github.com/opendatahub-io/mlflow-go/internal/transport"
 )
 
@@ -24,48 +25,6 @@ const (
 // It is safe for concurrent use.
 type Client struct {
 	transport *transport.Client
-}
-
-// modelVersionJSON represents the JSON structure of a model version response.
-type modelVersionJSON struct {
-	Name                 string            `json:"name"`
-	Version              string            `json:"version"`
-	Description          string            `json:"description"`
-	CreationTimestamp    int64             `json:"creation_timestamp"`
-	LastUpdatedTimestamp int64             `json:"last_updated_timestamp"`
-	Tags                 []modelVersionTag `json:"tags"`
-}
-
-type modelVersionTag struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-// registeredModelJSON represents the JSON structure of a registered model response.
-type registeredModelJSON struct {
-	Name                 string `json:"name"`
-	Description          string `json:"description"`
-	CreationTimestamp    int64  `json:"creation_timestamp"`
-	LastUpdatedTimestamp int64  `json:"last_updated_timestamp"`
-	LatestVersions       []struct {
-		Version string `json:"version"`
-	} `json:"latest_versions"`
-	Tags []modelVersionTag `json:"tags"`
-}
-
-// createRegisteredModelRequest is the request body for creating a RegisteredModel.
-type createRegisteredModelRequest struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Tags        []modelVersionTag `json:"tags,omitempty"`
-}
-
-// createModelVersionRequest is the request body for creating a ModelVersion.
-type createModelVersionRequest struct {
-	Name        string            `json:"name"`
-	Source      string            `json:"source"`
-	Description string            `json:"description,omitempty"`
-	Tags        []modelVersionTag `json:"tags,omitempty"`
 }
 
 // NewClient creates a new Prompt Registry client.
@@ -95,26 +54,18 @@ func (c *Client) LoadPrompt(ctx context.Context, name string, opts ...LoadOption
 
 // loadLatestPrompt loads the latest version of a prompt.
 func (c *Client) loadLatestPrompt(ctx context.Context, name string) (*Prompt, error) {
-	// Get the registered model to find latest version info
-	var getModelResp struct {
-		RegisteredModel struct {
-			Name           string `json:"name"`
-			LatestVersions []struct {
-				Version string `json:"version"`
-			} `json:"latest_versions"`
-		} `json:"registered_model"`
-	}
+	var resp mlflowpb.GetRegisteredModel_Response
 
 	query := url.Values{"name": []string{name}}
-	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &getModelResp)
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prompt: %w", err)
 	}
 
 	// Try to find the latest version from the registered model response
 	latestVersion := 0
-	if len(getModelResp.RegisteredModel.LatestVersions) > 0 {
-		v := getModelResp.RegisteredModel.LatestVersions[0].Version
+	if resp.RegisteredModel != nil && len(resp.RegisteredModel.LatestVersions) > 0 {
+		v := resp.RegisteredModel.LatestVersions[0].GetVersion()
 		if parsed, parseErr := strconv.Atoi(v); parseErr == nil && parsed > 0 {
 			latestVersion = parsed
 		}
@@ -133,11 +84,7 @@ func (c *Client) loadLatestPrompt(ctx context.Context, name string) (*Prompt, er
 
 // findLatestVersion searches for the highest version number of a prompt.
 func (c *Client) findLatestVersion(ctx context.Context, name string) (int, error) {
-	var searchResp struct {
-		ModelVersions []struct {
-			Version string `json:"version"`
-		} `json:"model_versions"`
-	}
+	var resp mlflowpb.SearchModelVersions_Response
 
 	query := url.Values{
 		"filter":      []string{fmt.Sprintf("name='%s'", escapeFilterValue(name))},
@@ -145,16 +92,16 @@ func (c *Client) findLatestVersion(ctx context.Context, name string) (int, error
 		"max_results": []string{"1"},
 	}
 
-	err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/search", query, &searchResp)
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/search", query, &resp)
 	if err != nil {
 		return 0, fmt.Errorf("failed to search versions: %w", err)
 	}
 
-	if len(searchResp.ModelVersions) == 0 {
+	if len(resp.ModelVersions) == 0 {
 		return 0, fmt.Errorf("prompt %q has no versions", name)
 	}
 
-	version, err := strconv.Atoi(searchResp.ModelVersions[0].Version)
+	version, err := strconv.Atoi(resp.ModelVersions[0].GetVersion())
 	if err != nil || version <= 0 {
 		return 0, fmt.Errorf("invalid version number for prompt %q", name)
 	}
@@ -164,9 +111,7 @@ func (c *Client) findLatestVersion(ctx context.Context, name string) (int, error
 
 // loadPromptVersion loads a specific version of a prompt.
 func (c *Client) loadPromptVersion(ctx context.Context, name string, version int) (*Prompt, error) {
-	var resp struct {
-		ModelVersion modelVersionJSON `json:"model_version"`
-	}
+	var resp mlflowpb.GetModelVersion_Response
 
 	query := url.Values{
 		"name":    []string{name},
@@ -178,87 +123,98 @@ func (c *Client) loadPromptVersion(ctx context.Context, name string, version int
 		return nil, fmt.Errorf("failed to get prompt version: %w", err)
 	}
 
-	return resp.ModelVersion.toPrompt(), nil
+	return modelVersionToPrompt(resp.ModelVersion), nil
 }
 
-func (mv *modelVersionJSON) toPrompt() *Prompt {
+func modelVersionToPrompt(mv *mlflowpb.ModelVersion) *Prompt {
+	if mv == nil {
+		return nil
+	}
+
 	p := &Prompt{
-		Name:        mv.Name,
+		Name:        mv.GetName(),
 		Template:    "",
-		Description: mv.Description,
+		Description: mv.GetDescription(),
 		Tags:        make(map[string]string),
 	}
 
 	// Parse version
-	if v, err := strconv.Atoi(mv.Version); err == nil {
+	if v, err := strconv.Atoi(mv.GetVersion()); err == nil {
 		p.Version = v
 	}
 
 	// Convert timestamps
-	if mv.CreationTimestamp > 0 {
-		p.CreatedAt = time.UnixMilli(mv.CreationTimestamp)
+	if mv.CreationTimestamp != nil && *mv.CreationTimestamp > 0 {
+		p.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
 	}
-	if mv.LastUpdatedTimestamp > 0 {
-		p.UpdatedAt = time.UnixMilli(mv.LastUpdatedTimestamp)
+	if mv.LastUpdatedTimestamp != nil && *mv.LastUpdatedTimestamp > 0 {
+		p.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
 	}
 
 	// Process tags
 	for _, tag := range mv.Tags {
-		switch tag.Key {
+		key := tag.GetKey()
+		value := tag.GetValue()
+		switch key {
 		case tagPromptText:
-			p.Template = tag.Value
+			p.Template = value
 		case tagDescription:
-			if tag.Value != "" {
-				p.Description = tag.Value
+			if value != "" {
+				p.Description = value
 			}
 		case tagIsPrompt, tagPromptType:
 			// Internal tags, don't expose
 		default:
-			p.Tags[tag.Key] = tag.Value
+			p.Tags[key] = value
 		}
 	}
 
 	return p
 }
 
-// toPromptWithoutTemplate converts a model version to a Prompt without loading template.
+// modelVersionToPromptWithoutTemplate converts a model version to a Prompt without loading template.
 // Used for listing operations where template content is not needed.
-func (mv *modelVersionJSON) toPromptWithoutTemplate() Prompt {
+func modelVersionToPromptWithoutTemplate(mv *mlflowpb.ModelVersion) Prompt {
+	if mv == nil {
+		return Prompt{}
+	}
+
 	p := Prompt{
-		Name:        mv.Name,
+		Name:        mv.GetName(),
 		Template:    "", // Intentionally empty for listings
-		Description: mv.Description,
+		Description: mv.GetDescription(),
 		Tags:        make(map[string]string),
 	}
 
 	// Parse version
-	if v, err := strconv.Atoi(mv.Version); err == nil {
+	if v, err := strconv.Atoi(mv.GetVersion()); err == nil {
 		p.Version = v
 	}
 
 	// Convert timestamps
-	if mv.CreationTimestamp > 0 {
-		p.CreatedAt = time.UnixMilli(mv.CreationTimestamp)
+	if mv.CreationTimestamp != nil && *mv.CreationTimestamp > 0 {
+		p.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
 	}
-	if mv.LastUpdatedTimestamp > 0 {
-		p.UpdatedAt = time.UnixMilli(mv.LastUpdatedTimestamp)
+	if mv.LastUpdatedTimestamp != nil && *mv.LastUpdatedTimestamp > 0 {
+		p.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
 	}
 
 	// Process tags (filter out internal ones including template)
 	for _, tag := range mv.Tags {
-		switch tag.Key {
+		key := tag.GetKey()
+		value := tag.GetValue()
+		switch key {
 		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription:
 			// Internal tags, don't expose
-			// Also skip template for listing operations
 		default:
-			p.Tags[tag.Key] = tag.Value
+			p.Tags[key] = value
 		}
 	}
 
 	// Check for description in tags (takes precedence)
 	for _, tag := range mv.Tags {
-		if tag.Key == tagDescription && tag.Value != "" {
-			p.Description = tag.Value
+		if tag.GetKey() == tagDescription && tag.GetValue() != "" {
+			p.Description = tag.GetValue()
 			break
 		}
 	}
@@ -266,34 +222,40 @@ func (mv *modelVersionJSON) toPromptWithoutTemplate() Prompt {
 	return p
 }
 
-func (rm *registeredModelJSON) toPromptInfo() PromptInfo {
+func registeredModelToPromptInfo(rm *mlflowpb.RegisteredModel) PromptInfo {
+	if rm == nil {
+		return PromptInfo{}
+	}
+
 	info := PromptInfo{
-		Name:        rm.Name,
-		Description: rm.Description,
+		Name:        rm.GetName(),
+		Description: rm.GetDescription(),
 		Tags:        make(map[string]string),
 	}
 
-	if rm.CreationTimestamp > 0 {
-		info.CreatedAt = time.UnixMilli(rm.CreationTimestamp)
+	if rm.CreationTimestamp != nil && *rm.CreationTimestamp > 0 {
+		info.CreatedAt = time.UnixMilli(*rm.CreationTimestamp)
 	}
-	if rm.LastUpdatedTimestamp > 0 {
-		info.UpdatedAt = time.UnixMilli(rm.LastUpdatedTimestamp)
+	if rm.LastUpdatedTimestamp != nil && *rm.LastUpdatedTimestamp > 0 {
+		info.UpdatedAt = time.UnixMilli(*rm.LastUpdatedTimestamp)
 	}
 
 	// Get latest version number
 	if len(rm.LatestVersions) > 0 {
-		if v, err := strconv.Atoi(rm.LatestVersions[0].Version); err == nil {
+		if v, err := strconv.Atoi(rm.LatestVersions[0].GetVersion()); err == nil {
 			info.LatestVersion = v
 		}
 	}
 
 	// Process tags (filter out internal ones)
 	for _, tag := range rm.Tags {
-		switch tag.Key {
+		key := tag.GetKey()
+		value := tag.GetValue()
+		switch key {
 		case tagIsPrompt, tagPromptType:
 			// Internal tags, don't expose
 		default:
-			info.Tags[tag.Key] = tag.Value
+			info.Tags[key] = value
 		}
 	}
 
@@ -327,18 +289,14 @@ func (c *Client) RegisterPrompt(ctx context.Context, name, template string, opts
 
 // ensureRegisteredModel creates the RegisteredModel if it doesn't exist.
 func (c *Client) ensureRegisteredModel(ctx context.Context, name string) error {
-	req := createRegisteredModelRequest{
-		Name: name,
-		Tags: []modelVersionTag{
-			{Key: tagIsPrompt, Value: "true"},
+	req := &mlflowpb.CreateRegisteredModel{
+		Name: &name,
+		Tags: []*mlflowpb.RegisteredModelTag{
+			{Key: ptr(tagIsPrompt), Value: ptr("true")},
 		},
 	}
 
-	var resp struct {
-		RegisteredModel struct {
-			Name string `json:"name"`
-		} `json:"registered_model"`
-	}
+	var resp mlflowpb.CreateRegisteredModel_Response
 
 	err := c.transport.Post(ctx, "/api/2.0/mlflow/registered-models/create", req, &resp)
 	if err != nil {
@@ -355,34 +313,33 @@ func (c *Client) ensureRegisteredModel(ctx context.Context, name string) error {
 // createModelVersion creates a new version of the prompt with the template.
 func (c *Client) createModelVersion(ctx context.Context, name, template string, opts *registerOptions) (*Prompt, error) {
 	// Build tags for the version
-	tags := []modelVersionTag{
-		{Key: tagPromptText, Value: template},
-		{Key: tagPromptType, Value: "text"},
-		{Key: tagIsPrompt, Value: "true"},
+	tags := []*mlflowpb.ModelVersionTag{
+		{Key: ptr(tagPromptText), Value: ptr(template)},
+		{Key: ptr(tagPromptType), Value: ptr("text")},
+		{Key: ptr(tagIsPrompt), Value: ptr("true")},
 	}
 
 	// Add user-provided tags
 	for k, v := range opts.tags {
-		tags = append(tags, modelVersionTag{Key: k, Value: v})
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(k), Value: ptr(v)})
 	}
 
-	req := createModelVersionRequest{
-		Name:        name,
-		Source:      "mlflow-artifacts:/" + name,
-		Description: opts.description,
+	source := "mlflow-artifacts:/" + name
+	req := &mlflowpb.CreateModelVersion{
+		Name:        &name,
+		Source:      &source,
+		Description: &opts.description,
 		Tags:        tags,
 	}
 
-	var resp struct {
-		ModelVersion modelVersionJSON `json:"model_version"`
-	}
+	var resp mlflowpb.CreateModelVersion_Response
 
 	err := c.transport.Post(ctx, "/api/2.0/mlflow/model-versions/create", req, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prompt version: %w", err)
 	}
 
-	return resp.ModelVersion.toPrompt(), nil
+	return modelVersionToPrompt(resp.ModelVersion), nil
 }
 
 // ListPrompts returns prompts matching the criteria.
@@ -409,10 +366,7 @@ func (c *Client) ListPrompts(ctx context.Context, opts ...ListPromptsOption) (*P
 		query.Add("order_by", o)
 	}
 
-	var resp struct {
-		RegisteredModels []registeredModelJSON `json:"registered_models"`
-		NextPageToken    string                `json:"next_page_token"`
-	}
+	var resp mlflowpb.SearchRegisteredModels_Response
 
 	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/search", query, &resp)
 	if err != nil {
@@ -421,11 +375,11 @@ func (c *Client) ListPrompts(ctx context.Context, opts ...ListPromptsOption) (*P
 
 	result := &PromptList{
 		Prompts:       make([]PromptInfo, 0, len(resp.RegisteredModels)),
-		NextPageToken: resp.NextPageToken,
+		NextPageToken: resp.GetNextPageToken(),
 	}
 
 	for _, rm := range resp.RegisteredModels {
-		result.Prompts = append(result.Prompts, rm.toPromptInfo())
+		result.Prompts = append(result.Prompts, registeredModelToPromptInfo(rm))
 	}
 
 	return result, nil
@@ -471,21 +425,15 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 	latestVersion, err := c.findLatestVersion(ctx, name)
 	if err != nil {
 		// If findLatestVersion fails, try getting the model directly
-		var getModelResp struct {
-			RegisteredModel struct {
-				LatestVersions []struct {
-					Version string `json:"version"`
-				} `json:"latest_versions"`
-			} `json:"registered_model"`
-		}
+		var getModelResp mlflowpb.GetRegisteredModel_Response
 
 		query := url.Values{"name": []string{name}}
 		if getErr := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &getModelResp); getErr != nil {
 			return nil, fmt.Errorf("failed to get prompt: %w", getErr)
 		}
 
-		if len(getModelResp.RegisteredModel.LatestVersions) > 0 {
-			if v, parseErr := strconv.Atoi(getModelResp.RegisteredModel.LatestVersions[0].Version); parseErr == nil {
+		if getModelResp.RegisteredModel != nil && len(getModelResp.RegisteredModel.LatestVersions) > 0 {
+			if v, parseErr := strconv.Atoi(getModelResp.RegisteredModel.LatestVersions[0].GetVersion()); parseErr == nil {
 				latestVersion = v
 			}
 		}
@@ -505,9 +453,7 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 			break
 		}
 
-		var resp struct {
-			ModelVersion modelVersionJSON `json:"model_version"`
-		}
+		var resp mlflowpb.GetModelVersion_Response
 
 		query := url.Values{
 			"name":    []string{name},
@@ -522,7 +468,7 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 			return nil, fmt.Errorf("failed to get version %d: %w", v, err)
 		}
 
-		result.Versions = append(result.Versions, resp.ModelVersion.toPromptWithoutTemplate())
+		result.Versions = append(result.Versions, modelVersionToPromptWithoutTemplate(resp.ModelVersion))
 	}
 
 	return result, nil
@@ -546,4 +492,9 @@ func joinFilters(filters []string) string {
 		result += " AND " + f
 	}
 	return result
+}
+
+// ptr returns a pointer to the given value.
+func ptr[T any](v T) *T {
+	return &v
 }
