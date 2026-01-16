@@ -1,3 +1,5 @@
+// Package mlflow provides a Go SDK for MLflow.
+// Currently supports Prompt Registry; more capabilities planned.
 package mlflow
 
 import (
