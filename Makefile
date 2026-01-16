@@ -1,6 +1,7 @@
 .PHONY: test/unit test/integration test/integration-ci gen dev/up dev/down dev/reset dev/seed help lint vet fmt tidy check run-sample
 
 # Configuration
+MLFLOW_VERSION ?= 3.8.1
 MLFLOW_PORT ?= 5000
 MLFLOW_DATA ?= $(shell pwd)/.mlflow
 LOCALBIN ?= $(shell pwd)/bin
@@ -56,7 +57,7 @@ test/integration-ci: $(UV)
 	@rm -rf $(MLFLOW_TEST_DATA)
 	@mkdir -p $(MLFLOW_TEST_DATA)
 	@echo "Starting MLflow test server on port $(MLFLOW_TEST_PORT)..."
-	@$(UV) run --with mlflow mlflow server \
+	@$(UV) run --with mlflow==$(MLFLOW_VERSION) mlflow server \
 		--host 127.0.0.1 \
 		--port $(MLFLOW_TEST_PORT) \
 		--backend-store-uri sqlite:///$(MLFLOW_TEST_DATA)/mlflow.db \
@@ -134,7 +135,7 @@ $(UV):
 dev/up: $(UV)
 	@mkdir -p $(MLFLOW_DATA)
 	@echo "Starting MLflow server on port $(MLFLOW_PORT)... (Ctrl+C to stop)"
-	$(UV) run --with mlflow mlflow server \
+	$(UV) run --with mlflow==$(MLFLOW_VERSION) mlflow server \
 		--host 127.0.0.1 \
 		--port $(MLFLOW_PORT) \
 		--backend-store-uri sqlite:///$(MLFLOW_DATA)/mlflow.db \
