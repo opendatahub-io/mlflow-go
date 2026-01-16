@@ -12,10 +12,60 @@ import (
 	"github.com/opendatahub-io/mlflow-go/internal/transport"
 )
 
+// Prompt tag keys used by MLflow to store prompt metadata.
+const (
+	tagPromptText  = "mlflow.prompt.text"
+	tagIsPrompt    = "mlflow.prompt.is_prompt"
+	tagPromptType  = "_mlflow_prompt_type"
+	tagDescription = "mlflow.prompt.description"
+)
+
 // Client provides access to the MLflow Prompt Registry.
 // It is safe for concurrent use.
 type Client struct {
 	transport *transport.Client
+}
+
+// modelVersionJSON represents the JSON structure of a model version response.
+type modelVersionJSON struct {
+	Name                 string            `json:"name"`
+	Version              string            `json:"version"`
+	Description          string            `json:"description"`
+	CreationTimestamp    int64             `json:"creation_timestamp"`
+	LastUpdatedTimestamp int64             `json:"last_updated_timestamp"`
+	Tags                 []modelVersionTag `json:"tags"`
+}
+
+type modelVersionTag struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// registeredModelJSON represents the JSON structure of a registered model response.
+type registeredModelJSON struct {
+	Name                 string `json:"name"`
+	Description          string `json:"description"`
+	CreationTimestamp    int64  `json:"creation_timestamp"`
+	LastUpdatedTimestamp int64  `json:"last_updated_timestamp"`
+	LatestVersions       []struct {
+		Version string `json:"version"`
+	} `json:"latest_versions"`
+	Tags []modelVersionTag `json:"tags"`
+}
+
+// createRegisteredModelRequest is the request body for creating a RegisteredModel.
+type createRegisteredModelRequest struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Tags        []modelVersionTag `json:"tags,omitempty"`
+}
+
+// createModelVersionRequest is the request body for creating a ModelVersion.
+type createModelVersionRequest struct {
+	Name        string            `json:"name"`
+	Source      string            `json:"source"`
+	Description string            `json:"description,omitempty"`
+	Tags        []modelVersionTag `json:"tags,omitempty"`
 }
 
 // NewClient creates a new Prompt Registry client.
@@ -131,29 +181,6 @@ func (c *Client) loadPromptVersion(ctx context.Context, name string, version int
 	return resp.ModelVersion.toPrompt(), nil
 }
 
-// modelVersionJSON represents the JSON structure of a model version response.
-type modelVersionJSON struct {
-	Name                 string            `json:"name"`
-	Version              string            `json:"version"`
-	Description          string            `json:"description"`
-	CreationTimestamp    int64             `json:"creation_timestamp"`
-	LastUpdatedTimestamp int64             `json:"last_updated_timestamp"`
-	Tags                 []modelVersionTag `json:"tags"`
-}
-
-type modelVersionTag struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-// Prompt tag keys used by MLflow to store prompt metadata.
-const (
-	tagPromptText  = "mlflow.prompt.text"
-	tagIsPrompt    = "mlflow.prompt.is_prompt"
-	tagPromptType  = "_mlflow_prompt_type"
-	tagDescription = "mlflow.prompt.description"
-)
-
 func (mv *modelVersionJSON) toPrompt() *Prompt {
 	p := &Prompt{
 		Name:        mv.Name,
@@ -192,6 +219,85 @@ func (mv *modelVersionJSON) toPrompt() *Prompt {
 	}
 
 	return p
+}
+
+// toPromptWithoutTemplate converts a model version to a Prompt without loading template.
+// Used for listing operations where template content is not needed.
+func (mv *modelVersionJSON) toPromptWithoutTemplate() Prompt {
+	p := Prompt{
+		Name:        mv.Name,
+		Template:    "", // Intentionally empty for listings
+		Description: mv.Description,
+		Tags:        make(map[string]string),
+	}
+
+	// Parse version
+	if v, err := strconv.Atoi(mv.Version); err == nil {
+		p.Version = v
+	}
+
+	// Convert timestamps
+	if mv.CreationTimestamp > 0 {
+		p.CreatedAt = time.UnixMilli(mv.CreationTimestamp)
+	}
+	if mv.LastUpdatedTimestamp > 0 {
+		p.UpdatedAt = time.UnixMilli(mv.LastUpdatedTimestamp)
+	}
+
+	// Process tags (filter out internal ones including template)
+	for _, tag := range mv.Tags {
+		switch tag.Key {
+		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription:
+			// Internal tags, don't expose
+			// Also skip template for listing operations
+		default:
+			p.Tags[tag.Key] = tag.Value
+		}
+	}
+
+	// Check for description in tags (takes precedence)
+	for _, tag := range mv.Tags {
+		if tag.Key == tagDescription && tag.Value != "" {
+			p.Description = tag.Value
+			break
+		}
+	}
+
+	return p
+}
+
+func (rm *registeredModelJSON) toPromptInfo() PromptInfo {
+	info := PromptInfo{
+		Name:        rm.Name,
+		Description: rm.Description,
+		Tags:        make(map[string]string),
+	}
+
+	if rm.CreationTimestamp > 0 {
+		info.CreatedAt = time.UnixMilli(rm.CreationTimestamp)
+	}
+	if rm.LastUpdatedTimestamp > 0 {
+		info.UpdatedAt = time.UnixMilli(rm.LastUpdatedTimestamp)
+	}
+
+	// Get latest version number
+	if len(rm.LatestVersions) > 0 {
+		if v, err := strconv.Atoi(rm.LatestVersions[0].Version); err == nil {
+			info.LatestVersion = v
+		}
+	}
+
+	// Process tags (filter out internal ones)
+	for _, tag := range rm.Tags {
+		switch tag.Key {
+		case tagIsPrompt, tagPromptType:
+			// Internal tags, don't expose
+		default:
+			info.Tags[tag.Key] = tag.Value
+		}
+	}
+
+	return info
 }
 
 // RegisterPrompt registers a prompt in the registry.
@@ -277,112 +383,6 @@ func (c *Client) createModelVersion(ctx context.Context, name, template string, 
 	}
 
 	return resp.ModelVersion.toPrompt(), nil
-}
-
-// createRegisteredModelRequest is the request body for creating a RegisteredModel.
-type createRegisteredModelRequest struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Tags        []modelVersionTag `json:"tags,omitempty"`
-}
-
-// createModelVersionRequest is the request body for creating a ModelVersion.
-type createModelVersionRequest struct {
-	Name        string            `json:"name"`
-	Source      string            `json:"source"`
-	Description string            `json:"description,omitempty"`
-	Tags        []modelVersionTag `json:"tags,omitempty"`
-}
-
-// registeredModelJSON represents the JSON structure of a registered model response.
-type registeredModelJSON struct {
-	Name                 string `json:"name"`
-	Description          string `json:"description"`
-	CreationTimestamp    int64  `json:"creation_timestamp"`
-	LastUpdatedTimestamp int64  `json:"last_updated_timestamp"`
-	LatestVersions       []struct {
-		Version string `json:"version"`
-	} `json:"latest_versions"`
-	Tags []modelVersionTag `json:"tags"`
-}
-
-func (rm *registeredModelJSON) toPromptInfo() PromptInfo {
-	info := PromptInfo{
-		Name:        rm.Name,
-		Description: rm.Description,
-		Tags:        make(map[string]string),
-	}
-
-	if rm.CreationTimestamp > 0 {
-		info.CreatedAt = time.UnixMilli(rm.CreationTimestamp)
-	}
-	if rm.LastUpdatedTimestamp > 0 {
-		info.UpdatedAt = time.UnixMilli(rm.LastUpdatedTimestamp)
-	}
-
-	// Get latest version number
-	if len(rm.LatestVersions) > 0 {
-		if v, err := strconv.Atoi(rm.LatestVersions[0].Version); err == nil {
-			info.LatestVersion = v
-		}
-	}
-
-	// Process tags (filter out internal ones)
-	for _, tag := range rm.Tags {
-		switch tag.Key {
-		case tagIsPrompt, tagPromptType:
-			// Internal tags, don't expose
-		default:
-			info.Tags[tag.Key] = tag.Value
-		}
-	}
-
-	return info
-}
-
-// toPromptWithoutTemplate converts a model version to a Prompt without loading template.
-// Used for listing operations where template content is not needed.
-func (mv *modelVersionJSON) toPromptWithoutTemplate() Prompt {
-	p := Prompt{
-		Name:        mv.Name,
-		Template:    "", // Intentionally empty for listings
-		Description: mv.Description,
-		Tags:        make(map[string]string),
-	}
-
-	// Parse version
-	if v, err := strconv.Atoi(mv.Version); err == nil {
-		p.Version = v
-	}
-
-	// Convert timestamps
-	if mv.CreationTimestamp > 0 {
-		p.CreatedAt = time.UnixMilli(mv.CreationTimestamp)
-	}
-	if mv.LastUpdatedTimestamp > 0 {
-		p.UpdatedAt = time.UnixMilli(mv.LastUpdatedTimestamp)
-	}
-
-	// Process tags (filter out internal ones including template)
-	for _, tag := range mv.Tags {
-		switch tag.Key {
-		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription:
-			// Internal tags, don't expose
-			// Also skip template for listing operations
-		default:
-			p.Tags[tag.Key] = tag.Value
-		}
-	}
-
-	// Check for description in tags (takes precedence)
-	for _, tag := range mv.Tags {
-		if tag.Key == tagDescription && tag.Value != "" {
-			p.Description = tag.Value
-			break
-		}
-	}
-
-	return p
 }
 
 // ListPrompts returns prompts matching the criteria.

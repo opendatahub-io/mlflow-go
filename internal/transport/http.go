@@ -31,6 +31,12 @@ type Config struct {
 	Timeout    time.Duration
 }
 
+// errorResponse represents the MLflow API error format.
+type errorResponse struct {
+	ErrorCode string `json:"error_code"`
+	Message   string `json:"message"`
+}
+
 // New creates a new transport Client.
 func New(cfg Config) (*Client, error) {
 	baseURL, err := url.Parse(cfg.BaseURL)
@@ -136,12 +142,6 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	}
 
 	return nil
-}
-
-// errorResponse represents the MLflow API error format.
-type errorResponse struct {
-	ErrorCode string `json:"error_code"`
-	Message   string `json:"message"`
 }
 
 func (c *Client) parseError(statusCode int, body []byte) error {
