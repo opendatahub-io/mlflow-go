@@ -45,7 +45,7 @@ test/unit:
 test/integration:
 	MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
-	go test -v -race -tags=integration ./mlflow/...
+	go test -v -race -tags=integration ./test/integration/...
 
 # CI/CD integration test target - starts MLflow, runs tests, stops MLflow
 # Uses isolated test database that is cleaned up after execution
@@ -74,7 +74,7 @@ test/integration-ci: $(UV)
 	@echo "Running integration tests..."
 	@MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_TEST_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
-	go test -v -race -tags=integration ./mlflow/...; \
+	go test -v -race -tags=integration ./test/integration/...; \
 	TEST_EXIT=$$?; \
 	echo "Stopping MLflow test server..."; \
 	lsof -t -i :$(MLFLOW_TEST_PORT) | xargs kill 2>/dev/null || true; \

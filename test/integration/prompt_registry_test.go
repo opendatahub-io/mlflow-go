@@ -1,6 +1,6 @@
 //go:build integration
 
-package mlflow
+package integration
 
 import (
 	"context"
@@ -8,17 +8,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opendatahub-io/mlflow-go/mlflow"
 	"github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
 )
 
-// TestE2E_PromptLifecycle tests the full prompt lifecycle:
+// TestPromptLifecycle tests the full prompt lifecycle:
 // 1. Register a new prompt (creates v1)
 // 2. Load the prompt by name (gets latest)
 // 3. Modify locally and register new version (creates v2)
 // 4. Load specific version (v1)
 // 5. Verify versions are correct
-func TestE2E_PromptLifecycle(t *testing.T) {
-	client, err := NewClient(WithInsecure())
+func TestPromptLifecycle(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
@@ -120,9 +121,9 @@ func TestE2E_PromptLifecycle(t *testing.T) {
 	t.Log("E2E test passed: full prompt lifecycle verified")
 }
 
-// TestE2E_NotFoundError tests that IsNotFound works correctly.
-func TestE2E_NotFoundError(t *testing.T) {
-	client, err := NewClient(WithInsecure())
+// TestNotFoundError tests that IsNotFound works correctly.
+func TestNotFoundError(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
@@ -134,14 +135,14 @@ func TestE2E_NotFoundError(t *testing.T) {
 		t.Fatal("Expected error for non-existent prompt")
 	}
 
-	if !IsNotFound(err) {
+	if !mlflow.IsNotFound(err) {
 		t.Errorf("Expected IsNotFound, got: %v", err)
 	}
 }
 
-// TestE2E_LoadWithTags tests that tags are preserved correctly.
-func TestE2E_LoadWithTags(t *testing.T) {
-	client, err := NewClient(WithInsecure())
+// TestLoadWithTags tests that tags are preserved correctly.
+func TestLoadWithTags(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
@@ -187,9 +188,9 @@ func TestE2E_LoadWithTags(t *testing.T) {
 	}
 }
 
-// TestE2E_ListPrompts tests listing all prompts.
-func TestE2E_ListPrompts(t *testing.T) {
-	client, err := NewClient(WithInsecure())
+// TestListPrompts tests listing all prompts.
+func TestListPrompts(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
@@ -232,9 +233,9 @@ func TestE2E_ListPrompts(t *testing.T) {
 	t.Logf("Listed %d prompts", len(list.Prompts))
 }
 
-// TestE2E_ListPromptsWithFilter tests listing prompts with name filter.
-func TestE2E_ListPromptsWithFilter(t *testing.T) {
-	client, err := NewClient(WithInsecure())
+// TestListPromptsWithFilter tests listing prompts with name filter.
+func TestListPromptsWithFilter(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
@@ -272,9 +273,9 @@ func TestE2E_ListPromptsWithFilter(t *testing.T) {
 	t.Logf("Filtered list returned %d prompts", len(list.Prompts))
 }
 
-// TestE2E_ListPromptVersions tests listing versions of a prompt.
-func TestE2E_ListPromptVersions(t *testing.T) {
-	client, err := NewClient(WithInsecure())
+// TestListPromptVersions tests listing versions of a prompt.
+func TestListPromptVersions(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
