@@ -1,6 +1,24 @@
+// Package promptregistry provides types and operations for MLflow Prompt Registry.
+//
+// # Storage Model: OSS MLflow vs Databricks Unity Catalog
+//
+// This SDK targets OSS MLflow, which stores prompts using the Model Registry:
+//   - A prompt is a RegisteredModel with tag "mlflow.prompt.is_prompt=true"
+//   - Each prompt version is a ModelVersion
+//   - The template text is stored in ModelVersion.Tags["mlflow.prompt.text"]
+//
+// Databricks Unity Catalog has native prompt support with a first-class
+// PromptVersion.template field. This SDK does not target Unity Catalog.
+//
+// Because OSS stores templates in tags (not a dedicated field), loading a prompt
+// requires fetching the ModelVersion with its tags. The SDK handles this
+// transparently, exposing a clean Prompt type to users.
+//
+// Reference: https://github.com/mlflow/mlflow/blob/master/mlflow/prompts/_prompt_registry.py
 package promptregistry
 
 import (
+	"maps"
 	"time"
 )
 
@@ -52,9 +70,7 @@ func (p *Prompt) Clone() *Prompt {
 
 	if p.Tags != nil {
 		clone.Tags = make(map[string]string, len(p.Tags))
-		for k, v := range p.Tags {
-			clone.Tags[k] = v
-		}
+		maps.Copy(clone.Tags, p.Tags)
 	}
 
 	return clone
