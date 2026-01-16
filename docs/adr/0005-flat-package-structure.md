@@ -1,89 +1,103 @@
-# ADR-0005: Flat Package Structure
+# ADR-0005: Multi-Package Structure with Domain Sub-Clients
 
-**Status**: Accepted
+**Status**: Accepted (revised 2025-01-16)
 
-**Date**: 2026-01-15
+**Date**: 2025-01-15 (revised 2025-01-16)
 
 **Authors**: @ederign
 
 ## Context
 
-The original plan.md specified a multi-package architecture:
+The SDK needs a package structure that can grow to support multiple MLflow domains:
+- Prompt Registry (current)
+- Tracking (future)
+- Model Registry (future)
+- Experiments (future)
 
-```
-├── client.go                 # Root Client with PromptRegistry() accessor
-├── promptregistry/           # Subpackage for prompt operations
-│   ├── client.go             # LoadPrompt, RegisterPrompt
-│   └── prompt.go             # Prompt type
-```
-
-This design anticipated future expansion (tracking/, modelregistry/ subpackages) and followed a pattern where the root Client would expose domain-specific sub-clients via accessor methods like `PromptRegistry()`.
-
-During implementation, we needed to decide whether to follow this multi-package structure or simplify.
+We initially chose a flat structure for simplicity, but reconsidered to enable clean expansion.
 
 ## Decision
 
-Use a flat `mlflow/` package structure with all prompt registry functionality directly on the Client:
+Use a multi-package architecture with domain-specific sub-clients accessible via accessor methods:
 
 ```
 ├── mlflow/
-│   ├── client.go             # Client with LoadPrompt, RegisterPrompt directly
-│   ├── prompt.go             # Prompt type
-│   ├── options.go            # All functional options
-│   └── errors.go             # Error types and helpers
+│   ├── client.go              # Root Client with PromptRegistry() accessor
+│   ├── options.go             # Client-level options (WithTrackingURI, WithToken, etc.)
+│   ├── errors.go              # Re-exports error helpers
+│   └── promptregistry/        # Prompt Registry domain
+│       ├── client.go          # PromptRegistryClient with LoadPrompt, RegisterPrompt
+│       ├── prompt.go          # Prompt, PromptInfo, PromptList types
+│       └── options.go         # Domain-specific options (WithVersion, WithTags, etc.)
 ```
 
-Users call `client.LoadPrompt()` and `client.RegisterPrompt()` directly instead of `client.PromptRegistry().LoadPrompt()`.
+### API Usage
+
+```go
+import "github.com/opendatahub-io/mlflow-go/mlflow"
+
+client, err := mlflow.NewClient(
+    mlflow.WithTrackingURI("https://mlflow.example.com"),
+)
+
+// Access prompt registry via sub-client
+prompt, err := client.PromptRegistry().LoadPrompt(ctx, "my-prompt")
+prompt, err := client.PromptRegistry().RegisterPrompt(ctx, "name", "template")
+list, err := client.PromptRegistry().ListPrompts(ctx)
+
+// Future domains follow same pattern
+// run, err := client.Tracking().CreateRun(ctx, experimentID)
+// model, err := client.ModelRegistry().GetModel(ctx, "name")
+```
 
 ## Alternatives Considered
 
-### Alternative 1: PromptRegistry() Accessor Pattern
+### Alternative 1: Flat Package (Previous Decision)
 
 ```go
-client.PromptRegistry().LoadPrompt(ctx, "my-prompt")
+client.LoadPrompt(ctx, "my-prompt")
 ```
 
-**Why rejected**:
-- Adds indirection without benefit for a single-domain SDK
-- More verbose API for users
-- Premature optimization for hypothetical future domains
+**Why reversed**:
+- SDK will expand beyond prompt registry
+- Adding methods directly to Client would create a bloated interface
+- Refactoring later would be a breaking change for users
+- Better to establish the pattern now
 
-### Alternative 2: Separate promptregistry Package
+### Alternative 2: Separate Top-Level Packages
 
 ```go
-import "github.com/ederign/mlflow-go/promptregistry"
-prClient := promptregistry.NewClient(client)
-prClient.LoadPrompt(ctx, "my-prompt")
+import "github.com/opendatahub-io/mlflow-go/promptregistry"
+prClient := promptregistry.NewClient(baseClient)
 ```
 
 **Why rejected**:
 - Forces users to import multiple packages
-- Awkward initialization flow
-- No clear benefit until we actually have multiple domains
+- Each domain needs its own initialization
+- Accessor pattern is more ergonomic and common in Go SDKs
 
 ## Consequences
 
 ### Positive
 
-- Simpler API: `client.LoadPrompt()` instead of `client.PromptRegistry().LoadPrompt()`
-- Single import: `import "github.com/ederign/mlflow-go/mlflow"`
-- Fewer files and packages to maintain
-- Easier to understand for new contributors
+- Clean separation between domains
+- Root Client interface stays small as SDK grows
+- Consistent pattern for all future domains
+- Each domain can have its own options without collision
 
 ### Negative
 
-- If we add tracking/ or modelregistry/ domains later, we'll need to either:
-  - Add methods directly to Client (growing the interface)
-  - Refactor to subpackages (breaking change)
-- Less namespace separation between domains
+- Slightly more verbose: `client.PromptRegistry().LoadPrompt()` vs `client.LoadPrompt()`
+- More packages to maintain
+- Internal packages need to share transport layer
 
 ### Neutral
 
-- The Prompt type abstraction (ADR-0004) still allows future compatibility with Databricks APIs
-- Can still add subpackages later if needed, treating this as the "prompt registry focused" SDK
+- Sub-clients are created lazily on first access (no extra allocation if unused)
+- Domain-specific options live in their respective packages
 
 ## References
 
-- Original plan.md project structure
-- ADR-0004: Prompt Type Abstraction Layer (related forward-compatibility decision)
-- Go standard library patterns (e.g., `http.Client` has methods directly rather than sub-clients)
+- AWS SDK for Go v2 uses similar pattern: `client.S3()`, `client.DynamoDB()`
+- Google Cloud Go SDK: `client.Storage()`, `client.BigQuery()`
+- ADR-0004: Prompt Type Abstraction Layer

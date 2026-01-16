@@ -1,6 +1,3 @@
-<!-- ABOUTME: ADR documenting the decision to wrap proto types in a public Prompt abstraction. -->
-<!-- ABOUTME: Explains forward compatibility with Databricks Unity Catalog native prompts. -->
-
 # ADR-0004: Prompt Type Abstraction Layer
 
 **Status**: Accepted

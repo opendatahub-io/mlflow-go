@@ -1,4 +1,4 @@
-module github.com/ederign/mlflow-go
+module github.com/opendatahub-io/mlflow-go
 
 go 1.23
 

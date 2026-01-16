@@ -1,6 +1,3 @@
-// ABOUTME: Minimal stub for databricks.proto to satisfy MLflow proto imports.
-// ABOUTME: Contains only the option definitions used by MLflow protos.
-
 syntax = "proto2";
 
 package mlflow;

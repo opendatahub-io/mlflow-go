@@ -1,7 +1,4 @@
-// ABOUTME: Tests for the Prompt type.
-// ABOUTME: Verifies immutable modification methods work correctly.
-
-package mlflow
+package promptregistry
 
 import (
 	"testing"

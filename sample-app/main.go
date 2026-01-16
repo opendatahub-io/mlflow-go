@@ -1,6 +1,3 @@
-// ABOUTME: Sample application demonstrating the MLflow Go SDK.
-// ABOUTME: Exercises RegisterPrompt, LoadPrompt, ListPrompts, and ListPromptVersions.
-
 package main
 
 import (
@@ -10,7 +7,8 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/ederign/mlflow-go/mlflow"
+	"github.com/opendatahub-io/mlflow-go/mlflow"
+	"github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
 )
 
 func main() {
@@ -32,10 +30,10 @@ func main() {
 
 	// === Path 1: RegisterPrompt - Create a new prompt ===
 	fmt.Println("=== 1. RegisterPrompt: Creating a new prompt ===")
-	prompt1, err := client.RegisterPrompt(ctx, promptName,
+	prompt1, err := client.PromptRegistry().RegisterPrompt(ctx, promptName,
 		"Time to walk Bella and Dora! Meeting at {{location}} at {{time}}.",
-		mlflow.WithDescription("Basic walk reminder for Bella and Dora"),
-		mlflow.WithTags(map[string]string{"author": "sample-app", "dogs": "bella,dora"}),
+		promptregistry.WithDescription("Basic walk reminder for Bella and Dora"),
+		promptregistry.WithTags(map[string]string{"author": "sample-app", "dogs": "bella,dora"}),
 	)
 	if err != nil {
 		log.Fatalf("Failed to register prompt: %v", err)
@@ -44,9 +42,9 @@ func main() {
 
 	// Create a second version to demonstrate versioning
 	fmt.Println("\n=== 1b. RegisterPrompt: Creating version 2 ===")
-	prompt2, err := client.RegisterPrompt(ctx, promptName,
+	prompt2, err := client.PromptRegistry().RegisterPrompt(ctx, promptName,
 		"Hey {{owner}}! Bella and Dora are ready for their walk at {{time}}. Don't forget the treats!",
-		mlflow.WithDescription("Added owner name and treats reminder"),
+		promptregistry.WithDescription("Added owner name and treats reminder"),
 	)
 	if err != nil {
 		log.Fatalf("Failed to register prompt v2: %v", err)
@@ -55,7 +53,7 @@ func main() {
 
 	// === Path 2: LoadPrompt - Load the latest version ===
 	fmt.Println("\n=== 2. LoadPrompt: Loading latest version ===")
-	latestPrompt, err := client.LoadPrompt(ctx, promptName)
+	latestPrompt, err := client.PromptRegistry().LoadPrompt(ctx, promptName)
 	if err != nil {
 		log.Fatalf("Failed to load latest prompt: %v", err)
 	}
@@ -63,7 +61,7 @@ func main() {
 
 	// === Path 3: LoadPrompt with WithVersion - Load specific version ===
 	fmt.Println("\n=== 3. LoadPrompt with WithVersion: Loading version 1 ===")
-	v1Prompt, err := client.LoadPrompt(ctx, promptName, mlflow.WithVersion(1))
+	v1Prompt, err := client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithVersion(1))
 	if err != nil {
 		log.Fatalf("Failed to load prompt version 1: %v", err)
 	}
@@ -71,7 +69,7 @@ func main() {
 
 	// === Path 4: ListPrompts - List all prompts ===
 	fmt.Println("\n=== 4. ListPrompts: Listing all prompts ===")
-	promptList, err := client.ListPrompts(ctx, mlflow.WithMaxResults(5))
+	promptList, err := client.PromptRegistry().ListPrompts(ctx, promptregistry.WithMaxResults(5))
 	if err != nil {
 		log.Fatalf("Failed to list prompts: %v", err)
 	}
@@ -85,7 +83,7 @@ func main() {
 
 	// === Path 5: ListPromptVersions - List versions of our prompt ===
 	fmt.Println("\n=== 5. ListPromptVersions: Listing versions of our prompt ===")
-	versionList, err := client.ListPromptVersions(ctx, promptName)
+	versionList, err := client.PromptRegistry().ListPromptVersions(ctx, promptName)
 	if err != nil {
 		log.Fatalf("Failed to list prompt versions: %v", err)
 	}
@@ -97,7 +95,7 @@ func main() {
 	fmt.Println("\n=== All operations completed successfully! ===")
 }
 
-func printPrompt(p *mlflow.Prompt) {
+func printPrompt(p *promptregistry.Prompt) {
 	fmt.Printf("  Name:        %s\n", p.Name)
 	fmt.Printf("  Version:     %d\n", p.Version)
 	fmt.Printf("  Template:    %s\n", p.Template)

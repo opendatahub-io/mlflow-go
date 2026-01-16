@@ -1,7 +1,4 @@
 #!/bin/bash
-# ABOUTME: Seeds sample prompts into a running MLflow server for testing.
-# ABOUTME: Uses Model Registry endpoints with prompt tags (OSS MLflow approach).
-
 set -euo pipefail
 
 MLFLOW_URI="${MLFLOW_TRACKING_URI:-http://localhost:5000}"

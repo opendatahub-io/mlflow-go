@@ -1,6 +1,3 @@
-// ABOUTME: Package mlflow provides a Go SDK for the MLflow platform.
-// ABOUTME: This is the main package containing the Client and Prompt types.
-
 // Package mlflow provides a Go SDK for the MLflow platform.
 //
 // The SDK currently supports the MLflow Prompt Registry, with additional

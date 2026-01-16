@@ -1,10 +1,7 @@
-// ABOUTME: Re-exports error types from internal package for public API.
-// ABOUTME: Provides helper functions to check error types (IsNotFound, IsUnauthorized, etc).
-
 package mlflow
 
 import (
-	internalerrors "github.com/ederign/mlflow-go/internal/errors"
+	internalerrors "github.com/opendatahub-io/mlflow-go/internal/errors"
 )
 
 // APIError represents an error response from the MLflow API.

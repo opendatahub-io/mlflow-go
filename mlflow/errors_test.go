@@ -1,6 +1,3 @@
-// ABOUTME: Tests for APIError type and error helper functions.
-// ABOUTME: Verifies error formatting and type checking helpers.
-
 package mlflow
 
 import (

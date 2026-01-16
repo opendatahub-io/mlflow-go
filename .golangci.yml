@@ -1,6 +1,3 @@
-# ABOUTME: Configuration for golangci-lint.
-# ABOUTME: Defines linting rules and enabled linters for the SDK.
-
 run:
   timeout: 5m
   modules-download-mode: readonly

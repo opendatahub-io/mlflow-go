@@ -1,6 +1,3 @@
-// ABOUTME: End-to-end tests for the MLflow Prompt Registry SDK.
-// ABOUTME: Tests full workflow: create, load, version prompts against real MLflow server.
-
 //go:build integration
 
 package mlflow
@@ -10,6 +7,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
 )
 
 // TestE2E_PromptLifecycle tests the full prompt lifecycle:
@@ -32,10 +31,10 @@ func TestE2E_PromptLifecycle(t *testing.T) {
 
 	// Step 1: Register a new prompt
 	t.Log("Step 1: Registering new prompt")
-	v1, err := client.RegisterPrompt(ctx, promptName,
+	v1, err := client.PromptRegistry().RegisterPrompt(ctx, promptName,
 		"Hello {{name}}!",
-		WithDescription("Initial version"),
-		WithTags(map[string]string{"test": "e2e"}),
+		promptregistry.WithDescription("Initial version"),
+		promptregistry.WithTags(map[string]string{"test": "e2e"}),
 	)
 	if err != nil {
 		t.Fatalf("RegisterPrompt() error = %v", err)
@@ -54,7 +53,7 @@ func TestE2E_PromptLifecycle(t *testing.T) {
 
 	// Step 2: Load the prompt by name (should get latest = v1)
 	t.Log("Step 2: Loading prompt by name")
-	loaded, err := client.LoadPrompt(ctx, promptName)
+	loaded, err := client.PromptRegistry().LoadPrompt(ctx, promptName)
 	if err != nil {
 		t.Fatalf("LoadPrompt() error = %v", err)
 	}
@@ -77,9 +76,9 @@ func TestE2E_PromptLifecycle(t *testing.T) {
 		t.Error("Original prompt was modified")
 	}
 
-	v2, err := client.RegisterPrompt(ctx, promptName,
+	v2, err := client.PromptRegistry().RegisterPrompt(ctx, promptName,
 		modified.Template,
-		WithDescription(modified.Description),
+		promptregistry.WithDescription(modified.Description),
 	)
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v2 error = %v", err)
@@ -95,7 +94,7 @@ func TestE2E_PromptLifecycle(t *testing.T) {
 
 	// Step 4: Load specific version (v1)
 	t.Log("Step 4: Loading specific version (v1)")
-	v1Loaded, err := client.LoadPrompt(ctx, promptName, WithVersion(1))
+	v1Loaded, err := client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithVersion(1))
 	if err != nil {
 		t.Fatalf("LoadPrompt(v1) error = %v", err)
 	}
@@ -109,7 +108,7 @@ func TestE2E_PromptLifecycle(t *testing.T) {
 
 	// Step 5: Load latest (should be v2 now)
 	t.Log("Step 5: Verifying latest is v2")
-	latest, err := client.LoadPrompt(ctx, promptName)
+	latest, err := client.PromptRegistry().LoadPrompt(ctx, promptName)
 	if err != nil {
 		t.Fatalf("LoadPrompt() latest error = %v", err)
 	}
@@ -130,7 +129,7 @@ func TestE2E_NotFoundError(t *testing.T) {
 
 	ctx := context.Background()
 
-	_, err = client.LoadPrompt(ctx, "nonexistent-prompt-xyz-123456")
+	_, err = client.PromptRegistry().LoadPrompt(ctx, "nonexistent-prompt-xyz-123456")
 	if err == nil {
 		t.Fatal("Expected error for non-existent prompt")
 	}
@@ -151,9 +150,9 @@ func TestE2E_LoadWithTags(t *testing.T) {
 	promptName := fmt.Sprintf("e2e-tags-test-%d", time.Now().UnixNano())
 
 	// Register with tags
-	_, err = client.RegisterPrompt(ctx, promptName,
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName,
 		"Template with tags",
-		WithTags(map[string]string{
+		promptregistry.WithTags(map[string]string{
 			"team":     "ml-platform",
 			"category": "greeting",
 			"env":      "test",
@@ -164,7 +163,7 @@ func TestE2E_LoadWithTags(t *testing.T) {
 	}
 
 	// Load and verify tags
-	loaded, err := client.LoadPrompt(ctx, promptName)
+	loaded, err := client.PromptRegistry().LoadPrompt(ctx, promptName)
 	if err != nil {
 		t.Fatalf("LoadPrompt() error = %v", err)
 	}
@@ -199,13 +198,13 @@ func TestE2E_ListPrompts(t *testing.T) {
 
 	// Create a unique prompt to ensure we have at least one
 	promptName := fmt.Sprintf("e2e-list-test-%d", time.Now().UnixNano())
-	_, err = client.RegisterPrompt(ctx, promptName, "List test template")
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "List test template")
 	if err != nil {
 		t.Fatalf("RegisterPrompt() error = %v", err)
 	}
 
 	// List all prompts
-	list, err := client.ListPrompts(ctx)
+	list, err := client.PromptRegistry().ListPrompts(ctx)
 	if err != nil {
 		t.Fatalf("ListPrompts() error = %v", err)
 	}
@@ -244,17 +243,17 @@ func TestE2E_ListPromptsWithFilter(t *testing.T) {
 
 	// Create prompts with a unique prefix
 	prefix := fmt.Sprintf("e2e-filter-%d", time.Now().UnixNano())
-	_, err = client.RegisterPrompt(ctx, prefix+"-alpha", "Alpha template")
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, prefix+"-alpha", "Alpha template")
 	if err != nil {
 		t.Fatalf("RegisterPrompt() error = %v", err)
 	}
-	_, err = client.RegisterPrompt(ctx, prefix+"-beta", "Beta template")
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, prefix+"-beta", "Beta template")
 	if err != nil {
 		t.Fatalf("RegisterPrompt() error = %v", err)
 	}
 
 	// List with name filter
-	list, err := client.ListPrompts(ctx, WithNameFilter(prefix+"%"))
+	list, err := client.PromptRegistry().ListPrompts(ctx, promptregistry.WithNameFilter(prefix+"%"))
 	if err != nil {
 		t.Fatalf("ListPrompts() with filter error = %v", err)
 	}
@@ -285,26 +284,26 @@ func TestE2E_ListPromptVersions(t *testing.T) {
 	// Create a prompt with multiple versions
 	promptName := fmt.Sprintf("e2e-versions-test-%d", time.Now().UnixNano())
 
-	_, err = client.RegisterPrompt(ctx, promptName, "Version 1 template",
-		WithDescription("First version"))
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 1 template",
+		promptregistry.WithDescription("First version"))
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v1 error = %v", err)
 	}
 
-	_, err = client.RegisterPrompt(ctx, promptName, "Version 2 template",
-		WithDescription("Second version"))
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 2 template",
+		promptregistry.WithDescription("Second version"))
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v2 error = %v", err)
 	}
 
-	_, err = client.RegisterPrompt(ctx, promptName, "Version 3 template",
-		WithDescription("Third version"))
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 3 template",
+		promptregistry.WithDescription("Third version"))
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v3 error = %v", err)
 	}
 
 	// List versions
-	versions, err := client.ListPromptVersions(ctx, promptName)
+	versions, err := client.PromptRegistry().ListPromptVersions(ctx, promptName)
 	if err != nil {
 		t.Fatalf("ListPromptVersions() error = %v", err)
 	}

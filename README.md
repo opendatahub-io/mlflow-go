@@ -1,13 +1,18 @@
 # mlflow-go
 
-A tiny Go SDK for the [MLflow](https://mlflow.org) Prompt Registry.
+A Go SDK for [MLflow](https://mlflow.org). Currently supports the Prompt Registry, with more capabilities planned.
 
 ## Features
+
+### Prompt Registry
 
 - Load prompts by name (latest or specific version)
 - List prompts and versions with filtering and pagination
 - Register new prompts and versions
 - Modify prompts locally with immutable operations
+
+### General
+
 - Full context support for cancellation and timeouts
 - Structured logging with `slog.Handler`
 - Type-safe error handling
@@ -15,7 +20,7 @@ A tiny Go SDK for the [MLflow](https://mlflow.org) Prompt Registry.
 ## Installation
 
 ```bash
-go get github.com/ederign/mlflow-go
+go get github.com/opendatahub-io/mlflow-go
 ```
 
 ## Quick Start
@@ -28,7 +33,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/ederign/mlflow-go/mlflow"
+    "github.com/opendatahub-io/mlflow-go/mlflow"
 )
 
 func main() {
@@ -41,7 +46,7 @@ func main() {
     ctx := context.Background()
 
     // Load a prompt
-    prompt, err := client.LoadPrompt(ctx, "my-prompt")
+    prompt, err := client.PromptRegistry().LoadPrompt(ctx, "my-prompt")
     if err != nil {
         if mlflow.IsNotFound(err) {
             log.Fatal("Prompt not found")
@@ -89,13 +94,15 @@ client, err := mlflow.NewClient(
 ### Load a Specific Version
 
 ```go
-prompt, err := client.LoadPrompt(ctx, "my-prompt", mlflow.WithVersion(2))
+import "github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
+
+prompt, err := client.PromptRegistry().LoadPrompt(ctx, "my-prompt", promptregistry.WithVersion(2))
 ```
 
 ### List All Prompts
 
 ```go
-list, err := client.ListPrompts(ctx)
+list, err := client.PromptRegistry().ListPrompts(ctx)
 if err != nil {
     log.Fatal(err)
 }
@@ -106,7 +113,7 @@ for _, info := range list.Prompts {
 
 // Pagination: fetch next page if available
 if list.NextPageToken != "" {
-    nextPage, err := client.ListPrompts(ctx, mlflow.WithPageToken(list.NextPageToken))
+    nextPage, err := client.PromptRegistry().ListPrompts(ctx, promptregistry.WithPageToken(list.NextPageToken))
     // ...
 }
 ```
@@ -115,17 +122,17 @@ if list.NextPageToken != "" {
 
 ```go
 // Filter by name pattern and tags
-list, err := client.ListPrompts(ctx,
-    mlflow.WithNameFilter("dog-%"),  // SQL LIKE syntax
-    mlflow.WithTagFilter(map[string]string{"category": "pets"}),
-    mlflow.WithMaxResults(10),
+list, err := client.PromptRegistry().ListPrompts(ctx,
+    promptregistry.WithNameFilter("dog-%"),  // SQL LIKE syntax
+    promptregistry.WithTagFilter(map[string]string{"category": "pets"}),
+    promptregistry.WithMaxResults(10),
 )
 ```
 
 ### List Prompt Versions
 
 ```go
-versions, err := client.ListPromptVersions(ctx, "my-prompt")
+versions, err := client.PromptRegistry().ListPromptVersions(ctx, "my-prompt")
 if err != nil {
     log.Fatal(err)
 }
@@ -135,8 +142,8 @@ for _, v := range versions.Versions {
 }
 
 // Limit results
-versions, err = client.ListPromptVersions(ctx, "my-prompt",
-    mlflow.WithVersionsMaxResults(10),
+versions, err = client.PromptRegistry().ListPromptVersions(ctx, "my-prompt",
+    promptregistry.WithVersionsMaxResults(10),
 )
 ```
 
@@ -145,10 +152,10 @@ versions, err = client.ListPromptVersions(ctx, "my-prompt",
 ### Register a New Prompt
 
 ```go
-prompt, err := client.RegisterPrompt(ctx, "dog-walker-prompt",
+prompt, err := client.PromptRegistry().RegisterPrompt(ctx, "dog-walker-prompt",
     "Time to walk Bella and Dora! Meeting at {{location}} at {{time}}.",
-    mlflow.WithDescription("Walk reminder for Bella and Dora"),
-    mlflow.WithTags(map[string]string{
+    promptregistry.WithDescription("Walk reminder for Bella and Dora"),
+    promptregistry.WithTags(map[string]string{
         "dogs": "bella,dora",
         "category": "scheduling",
     }),
@@ -160,7 +167,7 @@ fmt.Printf("Created: %s v%d\n", prompt.Name, prompt.Version)
 
 ```go
 // Load existing prompt
-prompt, err := client.LoadPrompt(ctx, "dog-walker-prompt")
+prompt, err := client.PromptRegistry().LoadPrompt(ctx, "dog-walker-prompt")
 if err != nil {
     log.Fatal(err)
 }
@@ -171,8 +178,8 @@ modified := prompt.
     WithDescription("Added owner and treats reminder")
 
 // Register as new version
-newVersion, err := client.RegisterPrompt(ctx, modified.Name, modified.Template,
-    mlflow.WithDescription(modified.Description),
+newVersion, err := client.PromptRegistry().RegisterPrompt(ctx, modified.Name, modified.Template,
+    promptregistry.WithDescription(modified.Description),
 )
 fmt.Printf("Created version %d\n", newVersion.Version)
 ```
@@ -194,7 +201,7 @@ client, err := mlflow.NewClient(
 The SDK provides type-safe error checking:
 
 ```go
-prompt, err := client.LoadPrompt(ctx, "my-prompt")
+prompt, err := client.PromptRegistry().LoadPrompt(ctx, "my-prompt")
 if err != nil {
     switch {
     case mlflow.IsNotFound(err):
@@ -256,16 +263,19 @@ make dev/reset
 
 ```
 mlflow-go/
-├── mlflow/              # Public SDK package
-│   ├── client.go        # Client and API methods
-│   ├── prompt.go        # Prompt type and methods
-│   ├── options.go       # Functional options
-│   └── errors.go        # Error types and helpers
-├── internal/            # Internal packages
-│   ├── errors/          # APIError implementation
-│   └── transport/       # HTTP client
-├── sample-app/          # Demo application
-└── specs/               # Design documentation
+├── mlflow/                     # Public SDK package
+│   ├── client.go               # Root client with domain accessors
+│   ├── options.go              # Client-level options
+│   ├── errors.go               # Error types and helpers
+│   └── promptregistry/         # Prompt Registry sub-client
+│       ├── client.go           # PromptRegistry API methods
+│       ├── prompt.go           # Prompt, PromptInfo types
+│       └── options.go          # Domain-specific options
+├── internal/                   # Internal packages
+│   ├── errors/                 # APIError implementation
+│   └── transport/              # HTTP client
+├── sample-app/                 # Demo application
+└── specs/                      # Design documentation
 ```
 
 ## License

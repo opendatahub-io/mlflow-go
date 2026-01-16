@@ -1,6 +1,3 @@
-// ABOUTME: Tests for HTTP transport layer.
-// ABOUTME: Uses httptest.Server to verify request/response handling.
-
 package transport
 
 import (
@@ -13,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ederign/mlflow-go/internal/errors"
+	"github.com/opendatahub-io/mlflow-go/internal/errors"
 )
 
 func TestClient_Get_Success(t *testing.T) {

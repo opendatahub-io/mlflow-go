@@ -1,6 +1,3 @@
-# ABOUTME: Build and development automation for the MLflow Go SDK.
-# ABOUTME: Provides targets for testing, code generation, and local MLflow server management.
-
 .PHONY: test/unit test/integration test/integration-ci gen dev/up dev/down dev/reset dev/seed help lint vet fmt tidy check run-sample
 
 # Configuration
@@ -122,8 +119,8 @@ gen: tools/proto/fetch-protos.sh $(PROTOC_GEN_GO)
 		--proto_path=tools/proto/stubs \
 		--go_out=internal/gen/mlflowpb \
 		--go_opt=paths=source_relative \
-		--go_opt=Mmodel_registry.proto=github.com/ederign/mlflow-go/internal/gen/mlflowpb \
-		--go_opt=Mdatabricks.proto=github.com/ederign/mlflow-go/internal/gen/mlflowpb \
+		--go_opt=Mmodel_registry.proto=github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb \
+		--go_opt=Mdatabricks.proto=github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb \
 		model_registry.proto databricks.proto
 
 # UV installation (lazy install)

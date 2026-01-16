@@ -1,6 +1,3 @@
-// ABOUTME: Tests for functional options.
-// ABOUTME: Verifies option constructors correctly set configuration values.
-
 package mlflow
 
 import (
@@ -77,37 +74,6 @@ func TestWithTimeout(t *testing.T) {
 
 	if opts.timeout != 60*time.Second {
 		t.Errorf("timeout = %v, want %v", opts.timeout, 60*time.Second)
-	}
-}
-
-func TestWithVersion(t *testing.T) {
-	opts := &loadOptions{}
-	WithVersion(5)(opts)
-
-	if opts.version != 5 {
-		t.Errorf("version = %d, want %d", opts.version, 5)
-	}
-}
-
-func TestWithDescription(t *testing.T) {
-	opts := &registerOptions{}
-	WithDescription("Initial version")(opts)
-
-	if opts.description != "Initial version" {
-		t.Errorf("description = %q, want %q", opts.description, "Initial version")
-	}
-}
-
-func TestWithTags(t *testing.T) {
-	opts := &registerOptions{}
-	tags := map[string]string{"team": "ml", "env": "prod"}
-	WithTags(tags)(opts)
-
-	if len(opts.tags) != 2 {
-		t.Errorf("tags length = %d, want %d", len(opts.tags), 2)
-	}
-	if opts.tags["team"] != "ml" {
-		t.Errorf("tags[team] = %q, want %q", opts.tags["team"], "ml")
 	}
 }
 

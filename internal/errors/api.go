@@ -1,6 +1,3 @@
-// ABOUTME: API error type for MLflow API failures.
-// ABOUTME: Provides structured error information and helper functions.
-
 package errors
 
 import (

@@ -1,7 +1,4 @@
-// ABOUTME: Defines the Prompt type representing a prompt from the registry.
-// ABOUTME: Provides immutable modification methods for local editing.
-
-package mlflow
+package promptregistry
 
 import (
 	"time"

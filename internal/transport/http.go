@@ -1,6 +1,3 @@
-// ABOUTME: HTTP transport layer for MLflow API communication.
-// ABOUTME: Handles request/response encoding, authentication, and error parsing.
-
 package transport
 
 import (
@@ -14,7 +11,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ederign/mlflow-go/internal/errors"
+	"github.com/opendatahub-io/mlflow-go/internal/errors"
 )
 
 // Client handles HTTP communication with the MLflow API.

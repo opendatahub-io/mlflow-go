@@ -1,7 +1,4 @@
 #!/bin/bash
-# ABOUTME: Fetches MLflow protobuf files from the pinned commit.
-# ABOUTME: Downloads only the proto files needed for Go SDK code generation.
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
