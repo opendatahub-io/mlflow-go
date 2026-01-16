@@ -43,9 +43,11 @@ MLflow's protos import `databricks.proto` which contains Databricks-internal def
 
 Generated types go to `internal/gen/mlflowpb/` (internal package). The public API uses hand-crafted types (`Prompt`, `PromptInfo`, etc.) as decided in ADR-0004.
 
-### 4. Use JSON structs instead of proto types for API communication
+### 4. Use proto types for JSON unmarshalling
 
-MLflow's REST API uses JSON, not protobuf wire format. We define JSON struct types directly in `client.go` (e.g., `modelVersionJSON`) rather than using proto-generated types with JSON tags. This is simpler and avoids proto runtime dependencies for basic operations.
+MLflow's REST API uses JSON, not protobuf wire format. However, proto-generated Go types include JSON tags and work with standard `encoding/json` for unmarshalling. We use `mlflowpb` types directly for API responses (e.g., `mlflowpb.GetRegisteredModel_Response`) and convert to public SDK types (e.g., `Prompt`) in dedicated conversion functions.
+
+This approach eliminates duplicate struct definitions while keeping nil-pointer handling isolated in conversion functions.
 
 ## Alternatives Considered
 
@@ -55,17 +57,17 @@ Copy proto files into the repository without a fetch mechanism.
 
 **Rejected**: Makes updates manual and error-prone. No clear provenance for which MLflow version the protos came from.
 
-### Alternative 2: Use proto types for JSON serialization
+### Alternative 2: Use protojson for JSON serialization
 
-Use proto-generated types with `protojson` for API communication.
+Use `protojson` library instead of standard `encoding/json`.
 
-**Rejected**: Adds unnecessary complexity. The REST API returns plain JSON, not proto-encoded data. Using protojson would require handling proto field naming conventions (snake_case vs camelCase) and optional field semantics.
+**Rejected**: Standard `encoding/json` works with proto-generated types via their JSON tags. The `protojson` library adds complexity for handling proto field naming conventions. We use proto types with standard JSON unmarshalling instead.
 
 ### Alternative 3: No proto generation at all
 
 Just use hand-written JSON structs for everything.
 
-**Rejected**: Having the official proto definitions available provides documentation value and enables future features (like proper proto-over-HTTP if MLflow adds support). The generation overhead is minimal.
+**Rejected**: Proto-generated types eliminate duplicate struct definitions and stay in sync with MLflow's schema. Hand-written structs would require manual maintenance when MLflow's API changes.
 
 ### Alternative 4: Depend on a databricks-sdk-go for proto definitions
 
@@ -81,12 +83,13 @@ Wait for or depend on an official Databricks SDK that exports these types.
 - Clear upgrade path when MLflow releases new APIs
 - Proto definitions serve as authoritative documentation
 - No dependency on unavailable Databricks internal code
+- Eliminates duplicate struct definitions for API responses
 
 ### Negative
 
 - Must maintain databricks.proto stub manually (low effort, rarely changes)
 - Must manually update PROTO_VERSION when adopting new MLflow releases
-- Generated code exists but is largely unused (slight repo bloat)
+- Adds protobuf runtime dependency (google.golang.org/protobuf)
 
 ### Neutral
 
