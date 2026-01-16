@@ -1,4 +1,4 @@
-package mlflow
+package errors
 
 import (
 	"errors"
@@ -212,6 +212,11 @@ func TestIsAlreadyExists(t *testing.T) {
 		{
 			name:     "APIError with 409",
 			err:      &APIError{StatusCode: http.StatusConflict},
+			expected: true,
+		},
+		{
+			name:     "APIError with RESOURCE_ALREADY_EXISTS code",
+			err:      &APIError{StatusCode: http.StatusBadRequest, Code: "RESOURCE_ALREADY_EXISTS"},
 			expected: true,
 		},
 		{
