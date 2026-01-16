@@ -10,9 +10,13 @@ An ADR is a document that captures an important architectural decision made alon
 
 | ID | Title | Status | Date |
 |----|-------|--------|------|
+| [0001](0001-oss-only-target-platform.md) | OSS-Only Target Platform | Accepted | 2026-01-14 |
 | [0001](0001-authentication-pattern.md) | Authentication Pattern | Accepted | 2026-01-14 |
 | [0002](0002-error-type-design.md) | Error Type Design | Accepted | 2026-01-14 |
 | [0003](0003-resilience-strategy.md) | Resilience Strategy | Accepted | 2026-01-14 |
+| [0004](0004-prompt-type-abstraction.md) | Prompt Type Abstraction | Accepted | 2026-01-15 |
+| [0005](0005-flat-package-structure.md) | Flat Package Structure | Accepted | 2026-01-15 |
+| [0006](0006-protobuf-strategy.md) | Protobuf Strategy | Accepted | 2026-01-16 |
 
 ## Creating a New ADR
 

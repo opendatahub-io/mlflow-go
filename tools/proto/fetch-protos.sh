@@ -41,11 +41,13 @@ done
 # Post-process: Remove scalapb import and options (Scala-specific, not needed for Go)
 echo "  Post-processing: removing scalapb references..."
 for proto in "${PROTO_FILES[@]}"; do
-    sed -i '' \
+    proto_file="${OUTPUT_DIR}/${proto}"
+    tmp_file="${proto_file}.tmp"
+    sed \
         -e '/import "scalapb\/scalapb.proto";/d' \
         -e '/option (scalapb/d' \
         -e '/(scalapb.message)/d' \
-        "${OUTPUT_DIR}/${proto}"
+        "${proto_file}" > "${tmp_file}" && mv "${tmp_file}" "${proto_file}"
 done
 
 echo "Proto files downloaded to ${OUTPUT_DIR}"

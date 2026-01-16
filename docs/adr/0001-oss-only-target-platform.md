@@ -116,4 +116,3 @@ Focusing on OSS keeps the codebase simple and maintainable.
 - [MLflow Prompt Registry Docs](https://mlflow.org/docs/latest/genai/prompt-registry/)
 - [OSS vs Managed MLflow](https://docs.databricks.com/aws/en/mlflow3/genai/overview/oss-managed-diff)
 - [Python SDK OSS Implementation](https://github.com/mlflow/mlflow/blob/master/mlflow/prompt/registry_utils.py)
-- [Constitution v0.4.0 - Target Platform section](../specs/001-prompt-registry-sdk/../../../.specify/memory/constitution.md)

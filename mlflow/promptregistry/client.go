@@ -397,7 +397,7 @@ func buildPromptsFilter(opts *listPromptsOptions) string {
 
 	// Add tag filters
 	for k, v := range opts.tagFilter {
-		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", escapeFilterValue(k), escapeFilterValue(v)))
+		filters = append(filters, fmt.Sprintf("tags.`%s` = '%s'", escapeFilterKey(k), escapeFilterValue(v)))
 	}
 
 	return joinFilters(filters)
@@ -472,6 +472,11 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 	}
 
 	return result, nil
+}
+
+// escapeFilterKey escapes backticks in filter keys to prevent injection.
+func escapeFilterKey(s string) string {
+	return strings.ReplaceAll(s, "`", "``")
 }
 
 // escapeFilterValue escapes single quotes in filter values to prevent injection.

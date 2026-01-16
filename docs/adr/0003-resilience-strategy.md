@@ -100,6 +100,6 @@ Retry GET requests but not POST/PUT/DELETE.
 
 ## References
 
-- AWS SDK for Go v2 retry: https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/retries-timeouts/
-- Google Cloud Go retry: https://pkg.go.dev/cloud.google.com/go#hdr-Retrying_Errors
-- retry-go library: https://github.com/avast/retry-go
+- [AWS SDK for Go v2 retry](https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/retries-timeouts/)
+- [Google Cloud Go retry](https://pkg.go.dev/cloud.google.com/go#hdr-Retrying_Errors)
+- [retry-go library](https://github.com/avast/retry-go)
