@@ -486,17 +486,7 @@ func escapeFilterValue(s string) string {
 
 // joinFilters joins filter conditions with AND.
 func joinFilters(filters []string) string {
-	if len(filters) == 0 {
-		return ""
-	}
-	if len(filters) == 1 {
-		return filters[0]
-	}
-	result := filters[0]
-	for _, f := range filters[1:] {
-		result += " AND " + f
-	}
-	return result
+	return strings.Join(filters, " AND ")
 }
 
 // ptr returns a pointer to the given value.
