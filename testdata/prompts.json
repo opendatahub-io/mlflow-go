@@ -1,0 +1,55 @@
+{
+  "prompts": [
+    {
+      "name": "greeting-prompt",
+      "description": "A simple greeting prompt for testing",
+      "use_case": "customer-onboarding",
+      "versions": [
+        {
+          "template": "Hello {{name}}! Bella and Dora say woof!",
+          "description": "Initial version with Bella and Dora",
+          "tags": [{"key": "author", "value": "test@example.com"}]
+        }
+      ]
+    },
+    {
+      "name": "dog-walker-prompt",
+      "description": "A prompt for scheduling dog walks with Bella and Dora",
+      "use_case": "pet-services",
+      "versions": [
+        {
+          "template": "Schedule a walk for Bella and Dora at {{time}} in {{location}}.",
+          "description": "Basic walk scheduling",
+          "tags": [{"key": "dogs", "value": "bella,dora"}]
+        },
+        {
+          "template": "Hi {{owner}}! Time to walk Bella and Dora at {{time}}. Meeting point: {{location}}. Don't forget the treats!",
+          "description": "Added owner and treats reminder",
+          "tags": [{"key": "dogs", "value": "bella,dora"}, {"key": "has_treats", "value": "true"}]
+        }
+      ]
+    },
+    {
+      "name": "qa-prompt",
+      "description": "A question-answering prompt with multiple versions",
+      "use_case": "knowledge-base",
+      "versions": [
+        {
+          "template": "Answer the following question: {{question}}",
+          "description": "Version 1 - basic",
+          "tags": [{"key": "type", "value": "qa"}]
+        },
+        {
+          "template": "Context: {{context}}\n\nQuestion: {{question}}\n\nAnswer:",
+          "description": "Version 2 - with context",
+          "tags": [{"key": "type", "value": "qa"}, {"key": "has_context", "value": "true"}]
+        },
+        {
+          "template": "You are a helpful assistant. Given the context below, answer the question.\n\nContext: {{context}}\n\nQuestion: {{question}}\n\nProvide a clear and concise answer:",
+          "description": "Version 3 - with system prompt",
+          "tags": [{"key": "type", "value": "qa"}, {"key": "has_context", "value": "true"}, {"key": "has_system", "value": "true"}]
+        }
+      ]
+    }
+  ]
+}
