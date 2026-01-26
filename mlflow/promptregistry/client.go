@@ -16,14 +16,14 @@ import (
 
 // Prompt tag keys used by MLflow to store prompt metadata.
 const (
-	tagPromptText        = "mlflow.prompt.text"
-	tagIsPrompt          = "mlflow.prompt.is_prompt"
-	tagPromptType        = "_mlflow_prompt_type"
-	tagDescription       = "mlflow.prompt.description"
-	tagModelConfig       = "_mlflow_prompt_model_config"
-	promptTypeText       = "text"
-	promptTypeChat       = "chat"
-	aliasTagPrefix       = "mlflow.prompt.alias."
+	tagPromptText  = "mlflow.prompt.text"
+	tagIsPrompt    = "mlflow.prompt.is_prompt"
+	tagPromptType  = "_mlflow_prompt_type"
+	tagDescription = "mlflow.prompt.description"
+	tagModelConfig = "_mlflow_prompt_model_config"
+	promptTypeText = "text"
+	promptTypeChat = "chat"
+	aliasTagPrefix = "mlflow.prompt.alias."
 )
 
 // Client provides access to the MLflow Prompt Registry.
@@ -466,7 +466,8 @@ func (c *Client) createChatPromptVersion(ctx context.Context, name string, messa
 
 	// Add model config if provided
 	if opts.modelConfig != nil {
-		configJSON, err := json.Marshal(opts.modelConfig)
+		var configJSON []byte
+		configJSON, err = json.Marshal(opts.modelConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to serialize model config: %w", err)
 		}
