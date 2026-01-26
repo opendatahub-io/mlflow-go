@@ -22,10 +22,16 @@ import (
 	"time"
 )
 
-// Prompt represents a prompt version from the MLflow Prompt Registry.
-// Prompt values are snapshots of server state at load time.
-// Modifications to a Prompt do not affect the registry until RegisterPrompt is called.
-type Prompt struct {
+// ChatMessage represents a single message in a chat prompt.
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// PromptVersion represents a prompt version from the MLflow Prompt Registry.
+// PromptVersion values are snapshots of server state at load time.
+// Modifications do not affect the registry until RegisterPrompt is called.
+type PromptVersion struct {
 	// Name is the prompt identifier in the registry.
 	Name string `json:"name"`
 
@@ -33,12 +39,24 @@ type Prompt struct {
 	// Zero if this is a new prompt not yet registered.
 	Version int `json:"version"`
 
-	// Template is the prompt template content.
+	// Template is the prompt template content for text prompts.
 	// May contain {{variable}} placeholders.
-	Template string `json:"template"`
+	// Empty for chat prompts (use Messages instead).
+	Template string `json:"template,omitempty"`
 
-	// Description is the version description or commit message.
-	Description string `json:"description"`
+	// Messages contains the chat messages for chat prompts.
+	// Each message may contain {{variable}} placeholders in Content.
+	// Nil for text prompts (use Template instead).
+	Messages []ChatMessage `json:"messages,omitempty"`
+
+	// CommitMessage is the version commit message.
+	CommitMessage string `json:"commit_message"`
+
+	// Aliases are the aliases pointing to this version (e.g., "production", "staging").
+	Aliases []string `json:"aliases,omitempty"`
+
+	// ModelConfig contains optional model configuration.
+	ModelConfig *PromptModelConfig `json:"model_config,omitempty"`
 
 	// Tags are key-value metadata pairs.
 	Tags map[string]string `json:"tags"`
@@ -52,9 +70,14 @@ type Prompt struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// PromptInfo represents prompt metadata from a listing operation.
-// Use LoadPrompt to get full Prompt with template content.
-type PromptInfo struct {
+// IsChat returns true if this is a chat prompt (has Messages), false for text prompts.
+func (v *PromptVersion) IsChat() bool {
+	return v.Messages != nil
+}
+
+// Prompt represents prompt metadata from a listing operation.
+// Use LoadPrompt to get full PromptVersion with template content.
+type Prompt struct {
 	// Name is the prompt identifier in the registry.
 	Name string `json:"name"`
 
@@ -67,17 +90,14 @@ type PromptInfo struct {
 	// Tags are key-value metadata pairs.
 	Tags map[string]string `json:"tags"`
 
-	// CreatedAt is when the prompt was created.
-	CreatedAt time.Time `json:"created_at"`
-
-	// UpdatedAt is when the prompt was last updated.
-	UpdatedAt time.Time `json:"updated_at"`
+	// CreationTimestamp is when the prompt was created.
+	CreationTimestamp time.Time `json:"creation_timestamp"`
 }
 
 // PromptList contains prompts and a pagination token for the next page.
 type PromptList struct {
 	// Prompts is the list of prompt metadata in this page.
-	Prompts []PromptInfo `json:"prompts"`
+	Prompts []Prompt `json:"prompts"`
 
 	// NextPageToken is the token to fetch the next page.
 	// Empty if there are no more pages.
@@ -88,54 +108,77 @@ type PromptList struct {
 type PromptVersionList struct {
 	// Versions is the list of prompt versions in this page.
 	// Template field will be empty; use LoadPrompt with WithVersion to get full content.
-	Versions []Prompt `json:"versions"`
+	Versions []PromptVersion `json:"versions"`
 
 	// NextPageToken is the token to fetch the next page.
 	// Empty if there are no more pages.
 	NextPageToken string `json:"next_page_token"`
 }
 
-// Clone returns a deep copy of the Prompt.
+// Clone returns a deep copy of the PromptVersion.
 // Use this to create a modified version for registration.
-func (p *Prompt) Clone() *Prompt {
-	if p == nil {
+func (v *PromptVersion) Clone() *PromptVersion {
+	if v == nil {
 		return nil
 	}
 
-	clone := &Prompt{
-		Name:        p.Name,
-		Version:     p.Version,
-		Template:    p.Template,
-		Description: p.Description,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
+	clone := &PromptVersion{
+		Name:          v.Name,
+		Version:       v.Version,
+		Template:      v.Template,
+		CommitMessage: v.CommitMessage,
+		CreatedAt:     v.CreatedAt,
+		UpdatedAt:     v.UpdatedAt,
 	}
 
-	if p.Tags != nil {
-		clone.Tags = make(map[string]string, len(p.Tags))
-		maps.Copy(clone.Tags, p.Tags)
+	if v.ModelConfig != nil {
+		cfg := *v.ModelConfig
+		if v.ModelConfig.StopSequences != nil {
+			cfg.StopSequences = make([]string, len(v.ModelConfig.StopSequences))
+			copy(cfg.StopSequences, v.ModelConfig.StopSequences)
+		}
+		if v.ModelConfig.ExtraParams != nil {
+			cfg.ExtraParams = make(map[string]any, len(v.ModelConfig.ExtraParams))
+			maps.Copy(cfg.ExtraParams, v.ModelConfig.ExtraParams)
+		}
+		clone.ModelConfig = &cfg
+	}
+
+	if v.Messages != nil {
+		clone.Messages = make([]ChatMessage, len(v.Messages))
+		copy(clone.Messages, v.Messages)
+	}
+
+	if v.Aliases != nil {
+		clone.Aliases = make([]string, len(v.Aliases))
+		copy(clone.Aliases, v.Aliases)
+	}
+
+	if v.Tags != nil {
+		clone.Tags = make(map[string]string, len(v.Tags))
+		maps.Copy(clone.Tags, v.Tags)
 	}
 
 	return clone
 }
 
 // WithTemplate returns a copy with the template replaced.
-func (p *Prompt) WithTemplate(template string) *Prompt {
-	clone := p.Clone()
+func (v *PromptVersion) WithTemplate(template string) *PromptVersion {
+	clone := v.Clone()
 	clone.Template = template
 	return clone
 }
 
-// WithDescription returns a copy with the description replaced.
-func (p *Prompt) WithDescription(description string) *Prompt {
-	clone := p.Clone()
-	clone.Description = description
+// WithCommitMessage returns a copy with the commit message replaced.
+func (v *PromptVersion) WithCommitMessage(msg string) *PromptVersion {
+	clone := v.Clone()
+	clone.CommitMessage = msg
 	return clone
 }
 
 // WithTag returns a copy with the tag added or updated.
-func (p *Prompt) WithTag(key, value string) *Prompt {
-	clone := p.Clone()
+func (v *PromptVersion) WithTag(key, value string) *PromptVersion {
+	clone := v.Clone()
 	if clone.Tags == nil {
 		clone.Tags = make(map[string]string)
 	}

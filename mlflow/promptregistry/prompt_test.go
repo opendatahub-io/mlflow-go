@@ -5,23 +5,23 @@ import (
 	"time"
 )
 
-func TestPrompt_Clone_Nil(t *testing.T) {
-	var p *Prompt
-	clone := p.Clone()
+func TestPromptVersion_Clone_Nil(t *testing.T) {
+	var pv *PromptVersion
+	clone := pv.Clone()
 	if clone != nil {
-		t.Error("expected nil for nil prompt")
+		t.Error("expected nil for nil PromptVersion")
 	}
 }
 
-func TestPrompt_Clone_Basic(t *testing.T) {
-	original := &Prompt{
-		Name:        "test-prompt",
-		Version:     3,
-		Template:    "Hello, {{name}}!",
-		Description: "A greeting",
-		Tags:        map[string]string{"team": "ml"},
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+func TestPromptVersion_Clone_Basic(t *testing.T) {
+	original := &PromptVersion{
+		Name:          "test-prompt",
+		Version:       3,
+		Template:      "Hello, {{name}}!",
+		CommitMessage: "A greeting",
+		Tags:          map[string]string{"team": "ml"},
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	clone := original.Clone()
@@ -36,8 +36,8 @@ func TestPrompt_Clone_Basic(t *testing.T) {
 	if clone.Template != original.Template {
 		t.Errorf("Template = %q, want %q", clone.Template, original.Template)
 	}
-	if clone.Description != original.Description {
-		t.Errorf("Description = %q, want %q", clone.Description, original.Description)
+	if clone.CommitMessage != original.CommitMessage {
+		t.Errorf("CommitMessage = %q, want %q", clone.CommitMessage, original.CommitMessage)
 	}
 	if clone.Tags["team"] != "ml" {
 		t.Errorf("Tags[team] = %q, want %q", clone.Tags["team"], "ml")
@@ -50,8 +50,8 @@ func TestPrompt_Clone_Basic(t *testing.T) {
 	}
 }
 
-func TestPrompt_Clone_NilTags(t *testing.T) {
-	original := &Prompt{
+func TestPromptVersion_Clone_NilTags(t *testing.T) {
+	original := &PromptVersion{
 		Name: "test",
 		Tags: nil,
 	}
@@ -63,8 +63,8 @@ func TestPrompt_Clone_NilTags(t *testing.T) {
 	}
 }
 
-func TestPrompt_WithTemplate(t *testing.T) {
-	original := &Prompt{
+func TestPromptVersion_WithTemplate(t *testing.T) {
+	original := &PromptVersion{
 		Name:     "test",
 		Template: "old template",
 	}
@@ -79,24 +79,24 @@ func TestPrompt_WithTemplate(t *testing.T) {
 	}
 }
 
-func TestPrompt_WithDescription(t *testing.T) {
-	original := &Prompt{
-		Name:        "test",
-		Description: "old desc",
+func TestPromptVersion_WithCommitMessage(t *testing.T) {
+	original := &PromptVersion{
+		Name:          "test",
+		CommitMessage: "old msg",
 	}
 
-	modified := original.WithDescription("new desc")
+	modified := original.WithCommitMessage("new msg")
 
-	if modified.Description != "new desc" {
-		t.Errorf("modified.Description = %q, want %q", modified.Description, "new desc")
+	if modified.CommitMessage != "new msg" {
+		t.Errorf("modified.CommitMessage = %q, want %q", modified.CommitMessage, "new msg")
 	}
-	if original.Description != "old desc" {
+	if original.CommitMessage != "old msg" {
 		t.Error("original should not be modified")
 	}
 }
 
-func TestPrompt_WithTag(t *testing.T) {
-	original := &Prompt{
+func TestPromptVersion_WithTag(t *testing.T) {
+	original := &PromptVersion{
 		Name: "test",
 		Tags: map[string]string{"existing": "value"},
 	}
@@ -114,8 +114,8 @@ func TestPrompt_WithTag(t *testing.T) {
 	}
 }
 
-func TestPrompt_WithTag_NilTags(t *testing.T) {
-	original := &Prompt{
+func TestPromptVersion_WithTag_NilTags(t *testing.T) {
+	original := &PromptVersion{
 		Name: "test",
 		Tags: nil,
 	}
@@ -127,8 +127,8 @@ func TestPrompt_WithTag_NilTags(t *testing.T) {
 	}
 }
 
-func TestPrompt_WithTag_UpdateExisting(t *testing.T) {
-	original := &Prompt{
+func TestPromptVersion_WithTag_UpdateExisting(t *testing.T) {
+	original := &PromptVersion{
 		Name: "test",
 		Tags: map[string]string{"key": "old"},
 	}
@@ -143,27 +143,81 @@ func TestPrompt_WithTag_UpdateExisting(t *testing.T) {
 	}
 }
 
-func TestPrompt_Chaining(t *testing.T) {
-	original := &Prompt{
+func TestPromptVersion_Chaining(t *testing.T) {
+	original := &PromptVersion{
 		Name:     "test",
 		Template: "original",
 	}
 
 	modified := original.
 		WithTemplate("new template").
-		WithDescription("new desc").
+		WithCommitMessage("new msg").
 		WithTag("env", "prod")
 
 	if modified.Template != "new template" {
 		t.Errorf("Template = %q", modified.Template)
 	}
-	if modified.Description != "new desc" {
-		t.Errorf("Description = %q", modified.Description)
+	if modified.CommitMessage != "new msg" {
+		t.Errorf("CommitMessage = %q", modified.CommitMessage)
 	}
 	if modified.Tags["env"] != "prod" {
 		t.Errorf("Tags[env] = %q", modified.Tags["env"])
 	}
 	if original.Template != "original" {
 		t.Error("original should not be modified")
+	}
+}
+
+func TestPromptVersion_Clone_ModelConfig(t *testing.T) {
+	temp := 0.7
+	original := &PromptVersion{
+		Name: "test",
+		ModelConfig: &PromptModelConfig{
+			Provider:      "openai",
+			Temperature:   &temp,
+			StopSequences: []string{"stop1", "stop2"},
+			ExtraParams:   map[string]any{"foo": "bar"},
+		},
+	}
+
+	clone := original.Clone()
+
+	// Verify fields are copied
+	if clone.ModelConfig.Provider != "openai" {
+		t.Errorf("Provider = %q, want %q", clone.ModelConfig.Provider, "openai")
+	}
+	if *clone.ModelConfig.Temperature != 0.7 {
+		t.Errorf("Temperature = %v, want %v", *clone.ModelConfig.Temperature, 0.7)
+	}
+
+	// Verify StopSequences is a deep copy
+	clone.ModelConfig.StopSequences[0] = "modified"
+	if original.ModelConfig.StopSequences[0] == "modified" {
+		t.Error("modifying clone's StopSequences should not affect original")
+	}
+
+	// Verify ExtraParams is a deep copy
+	clone.ModelConfig.ExtraParams["foo"] = "modified"
+	if original.ModelConfig.ExtraParams["foo"] == "modified" {
+		t.Error("modifying clone's ExtraParams should not affect original")
+	}
+
+	// Verify ModelConfig struct itself is a deep copy
+	clone.ModelConfig.Provider = "anthropic"
+	if original.ModelConfig.Provider == "anthropic" {
+		t.Error("modifying clone's ModelConfig should not affect original")
+	}
+}
+
+func TestPromptVersion_Clone_NilModelConfig(t *testing.T) {
+	original := &PromptVersion{
+		Name:        "test",
+		ModelConfig: nil,
+	}
+
+	clone := original.Clone()
+
+	if clone.ModelConfig != nil {
+		t.Error("nil ModelConfig should remain nil after clone")
 	}
 }

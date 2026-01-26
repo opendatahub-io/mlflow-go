@@ -71,6 +71,11 @@ func (c *Client) Post(ctx context.Context, path string, body, result any) error 
 	return c.do(ctx, http.MethodPost, path, nil, body, result)
 }
 
+// Delete performs a DELETE request to the specified path with a JSON body.
+func (c *Client) Delete(ctx context.Context, path string, body, result any) error {
+	return c.do(ctx, http.MethodDelete, path, nil, body, result)
+}
+
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, result any) error {
 	// Build request URL
 	reqURL := c.baseURL.ResolveReference(&url.URL{Path: path, RawQuery: query.Encode()})

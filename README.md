@@ -8,7 +8,8 @@ A Go SDK for [MLflow](https://mlflow.org). Currently supports the Prompt Registr
 
 - Load prompts by name (latest or specific version)
 - List prompts and versions with filtering and pagination
-- Register new prompts and versions
+- Register text prompts and chat prompts (with model configuration)
+- Format prompts with variable substitution
 - Modify prompts locally with immutable operations
 
 ### General
@@ -89,6 +90,15 @@ client, err := mlflow.NewClient(
 )
 ```
 
+## Core Types
+
+The SDK uses two main types for prompts:
+
+- **`Prompt`** – Lightweight metadata returned by `ListPrompts()`. Contains name, description, latest version number, and tags. Does not include template content.
+- **`PromptVersion`** – Full prompt content returned by `LoadPrompt()`. Contains the template (or messages for chat prompts), version number, aliases, model config, and timestamps. This is what you use to format prompts with variables.
+
+Use `ListPrompts()` to browse available prompts, then `LoadPrompt()` to fetch the full content when you need it.
+
 ## Usage Examples
 
 ### Load a Specific Version
@@ -97,6 +107,23 @@ client, err := mlflow.NewClient(
 import "github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
 
 prompt, err := client.PromptRegistry().LoadPrompt(ctx, "my-prompt", promptregistry.WithVersion(2))
+```
+
+### Load by Alias
+
+```go
+// Load the version pointed to by an alias (e.g., "production", "staging")
+prompt, err := client.PromptRegistry().LoadPrompt(ctx, "my-prompt", promptregistry.WithAlias("production"))
+```
+
+### Manage Aliases
+
+```go
+// Set an alias to point to a specific version
+err := client.PromptRegistry().SetPromptAlias(ctx, "my-prompt", "production", 3)
+
+// Delete an alias
+err := client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "staging")
 ```
 
 ### List All Prompts
@@ -138,7 +165,7 @@ if err != nil {
 }
 
 for _, v := range versions.Versions {
-    fmt.Printf("v%d: %s\n", v.Version, v.Description)
+    fmt.Printf("v%d: %s\n", v.Version, v.CommitMessage)
 }
 
 // Limit results
@@ -149,18 +176,66 @@ versions, err = client.PromptRegistry().ListPromptVersions(ctx, "my-prompt",
 
 > **Note**: Due to a limitation in MLflow OSS, `ListPromptVersions` fetches versions individually. Only `WithVersionsMaxResults` is supported; pagination and tag filtering options are ignored.
 
-### Register a New Prompt
+### Register a Text Prompt
 
 ```go
 prompt, err := client.PromptRegistry().RegisterPrompt(ctx, "dog-walker-prompt",
     "Time to walk Bella and Dora! Meeting at {{location}} at {{time}}.",
-    promptregistry.WithDescription("Walk reminder for Bella and Dora"),
+    promptregistry.WithCommitMessage("Walk reminder for Bella and Dora"),
     promptregistry.WithTags(map[string]string{
         "dogs": "bella,dora",
         "category": "scheduling",
     }),
 )
 fmt.Printf("Created: %s v%d\n", prompt.Name, prompt.Version)
+```
+
+### Register a Chat Prompt
+
+```go
+messages := []promptregistry.ChatMessage{
+    {Role: "system", Content: "You are a helpful dog walking assistant for {{owner}}."},
+    {Role: "user", Content: "When should I walk {{dog_name}} today?"},
+}
+
+// Optional: include model configuration
+temp := 0.7
+modelConfig := &promptregistry.PromptModelConfig{
+    Provider:    "openai",
+    ModelName:   "gpt-4",
+    Temperature: &temp,
+}
+
+prompt, err := client.PromptRegistry().RegisterChatPrompt(ctx, "dog-assistant",
+    messages,
+    promptregistry.WithCommitMessage("Chat assistant for dog walking"),
+    promptregistry.WithModelConfig(modelConfig),
+)
+fmt.Printf("Created chat prompt: %s v%d\n", prompt.Name, prompt.Version)
+```
+
+### Format Prompts with Variables
+
+```go
+// Text prompts - get formatted string directly
+prompt, _ := client.PromptRegistry().LoadPrompt(ctx, "dog-walker-prompt")
+text, err := prompt.FormatAsText(map[string]string{
+    "location": "Central Park",
+    "time":     "3pm",
+})
+// Result: "Time to walk Bella and Dora! Meeting at Central Park at 3pm."
+
+// Chat prompts - get formatted messages
+chatPrompt, _ := client.PromptRegistry().LoadPrompt(ctx, "dog-assistant")
+messages, err := chatPrompt.FormatAsMessages(map[string]string{
+    "owner":    "Alice",
+    "dog_name": "Bella",
+})
+// Returns []ChatMessage with variables substituted
+
+// Generic format - returns a new PromptVersion with variables substituted
+formatted, err := prompt.Format(map[string]string{"location": "Park", "time": "3pm"})
+// formatted.Template or formatted.Messages contains the result
 ```
 
 ### Modify and Create New Version
@@ -175,11 +250,11 @@ if err != nil {
 // Modify locally (original unchanged)
 modified := prompt.
     WithTemplate("Hey {{owner}}! Bella and Dora are ready for their walk. Don't forget the treats!").
-    WithDescription("Added owner and treats reminder")
+    WithCommitMessage("Added owner and treats reminder")
 
 // Register as new version
 newVersion, err := client.PromptRegistry().RegisterPrompt(ctx, modified.Name, modified.Template,
-    promptregistry.WithDescription(modified.Description),
+    promptregistry.WithCommitMessage(modified.CommitMessage),
 )
 fmt.Printf("Created version %d\n", newVersion.Version)
 ```
@@ -220,6 +295,26 @@ if err != nil {
     return
 }
 ```
+
+## Feature Comparison with Python SDK
+
+This Go SDK covers the core Prompt Registry functionality. Some advanced features from the [Python SDK](https://mlflow.org/docs/latest/genai/prompt-registry/) are not yet implemented:
+
+| Feature | Status |
+|---------|--------|
+| Load/register prompts | ✅ Supported |
+| Text and chat prompts | ✅ Supported |
+| Variable substitution (`{{var}}`) | ✅ Supported |
+| Model configuration | ✅ Supported |
+| Version and alias management | ✅ Supported |
+| List/search with filters | ✅ Supported |
+| Tags on registration | ✅ Supported |
+| Set/delete tags after creation | ❌ Not yet |
+| Update model config after creation | ❌ Not yet |
+| Delete prompt versions | ❌ Not yet |
+| Jinja2 templates (conditionals, loops) | ❌ Not yet |
+| Response format specification | ❌ Not yet |
+| Cache TTL configuration | ❌ Not yet |
 
 ## Development
 

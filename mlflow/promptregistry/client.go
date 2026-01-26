@@ -2,6 +2,7 @@ package promptregistry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -15,10 +16,14 @@ import (
 
 // Prompt tag keys used by MLflow to store prompt metadata.
 const (
-	tagPromptText  = "mlflow.prompt.text"
-	tagIsPrompt    = "mlflow.prompt.is_prompt"
-	tagPromptType  = "_mlflow_prompt_type"
-	tagDescription = "mlflow.prompt.description"
+	tagPromptText        = "mlflow.prompt.text"
+	tagIsPrompt          = "mlflow.prompt.is_prompt"
+	tagPromptType        = "_mlflow_prompt_type"
+	tagDescription       = "mlflow.prompt.description"
+	tagModelConfig       = "_mlflow_prompt_model_config"
+	promptTypeText       = "text"
+	promptTypeChat       = "chat"
+	aliasTagPrefix       = "mlflow.prompt.alias."
 )
 
 // Client provides access to the MLflow Prompt Registry.
@@ -34,8 +39,8 @@ func NewClient(t *transport.Client) *Client {
 }
 
 // LoadPrompt loads a prompt from the registry by name.
-// If no version is specified via WithVersion, loads the latest version.
-func (c *Client) LoadPrompt(ctx context.Context, name string, opts ...LoadOption) (*Prompt, error) {
+// If no version is specified via WithVersion or WithAlias, loads the latest version.
+func (c *Client) LoadPrompt(ctx context.Context, name string, opts ...LoadOption) (*PromptVersion, error) {
 	if name == "" {
 		return nil, fmt.Errorf("mlflow: prompt name is required")
 	}
@@ -45,15 +50,24 @@ func (c *Client) LoadPrompt(ctx context.Context, name string, opts ...LoadOption
 		opt(loadOpts)
 	}
 
+	// If alias is specified, resolve it to a version number
+	if loadOpts.alias != "" {
+		version, err := c.resolveAlias(ctx, name, loadOpts.alias)
+		if err != nil {
+			return nil, err
+		}
+		return c.loadPromptVersionByNumber(ctx, name, version)
+	}
+
 	if loadOpts.version > 0 {
-		return c.loadPromptVersion(ctx, name, loadOpts.version)
+		return c.loadPromptVersionByNumber(ctx, name, loadOpts.version)
 	}
 
 	return c.loadLatestPrompt(ctx, name)
 }
 
 // loadLatestPrompt loads the latest version of a prompt.
-func (c *Client) loadLatestPrompt(ctx context.Context, name string) (*Prompt, error) {
+func (c *Client) loadLatestPrompt(ctx context.Context, name string) (*PromptVersion, error) {
 	var resp mlflowpb.GetRegisteredModel_Response
 
 	query := url.Values{"name": []string{name}}
@@ -79,7 +93,7 @@ func (c *Client) loadLatestPrompt(ctx context.Context, name string) (*Prompt, er
 		}
 	}
 
-	return c.loadPromptVersion(ctx, name, latestVersion)
+	return c.loadPromptVersionByNumber(ctx, name, latestVersion)
 }
 
 // findLatestVersion searches for the highest version number of a prompt.
@@ -109,8 +123,8 @@ func (c *Client) findLatestVersion(ctx context.Context, name string) (int, error
 	return version, nil
 }
 
-// loadPromptVersion loads a specific version of a prompt.
-func (c *Client) loadPromptVersion(ctx context.Context, name string, version int) (*Prompt, error) {
+// loadPromptVersionByNumber loads a specific version of a prompt by version number.
+func (c *Client) loadPromptVersionByNumber(ctx context.Context, name string, version int) (*PromptVersion, error) {
 	var resp mlflowpb.GetModelVersion_Response
 
 	query := url.Values{
@@ -123,33 +137,65 @@ func (c *Client) loadPromptVersion(ctx context.Context, name string, version int
 		return nil, fmt.Errorf("failed to get prompt version: %w", err)
 	}
 
-	return modelVersionToPrompt(resp.ModelVersion), nil
+	return modelVersionToPromptVersion(resp.ModelVersion), nil
 }
 
-func modelVersionToPrompt(mv *mlflowpb.ModelVersion) *Prompt {
+// resolveAlias resolves an alias to a version number.
+func (c *Client) resolveAlias(ctx context.Context, name, alias string) (int, error) {
+	var resp mlflowpb.GetRegisteredModel_Response
+
+	query := url.Values{"name": []string{name}}
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &resp)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get prompt: %w", err)
+	}
+
+	if resp.RegisteredModel == nil {
+		return 0, fmt.Errorf("prompt %q not found", name)
+	}
+
+	// Look for the alias tag
+	aliasTag := aliasTagPrefix + alias
+	for _, tag := range resp.RegisteredModel.Tags {
+		if tag.GetKey() == aliasTag {
+			version, err := strconv.Atoi(tag.GetValue())
+			if err != nil {
+				return 0, fmt.Errorf("invalid version for alias %q: %s", alias, tag.GetValue())
+			}
+			return version, nil
+		}
+	}
+
+	return 0, fmt.Errorf("alias %q not found for prompt %q", alias, name)
+}
+
+func modelVersionToPromptVersion(mv *mlflowpb.ModelVersion) *PromptVersion {
 	if mv == nil {
 		return nil
 	}
 
-	p := &Prompt{
-		Name:        mv.GetName(),
-		Template:    "",
-		Description: mv.GetDescription(),
-		Tags:        make(map[string]string),
+	pv := &PromptVersion{
+		Name:          mv.GetName(),
+		CommitMessage: mv.GetDescription(),
+		Tags:          make(map[string]string),
 	}
 
 	// Parse version
 	if v, err := strconv.Atoi(mv.GetVersion()); err == nil {
-		p.Version = v
+		pv.Version = v
 	}
 
 	// Convert timestamps
 	if mv.CreationTimestamp != nil && *mv.CreationTimestamp > 0 {
-		p.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
+		pv.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
 	}
 	if mv.LastUpdatedTimestamp != nil && *mv.LastUpdatedTimestamp > 0 {
-		p.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
+		pv.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
 	}
+
+	var promptType string
+	var promptText string
+	var modelConfigJSON string
 
 	// Process tags
 	for _, tag := range mv.Tags {
@@ -157,46 +203,72 @@ func modelVersionToPrompt(mv *mlflowpb.ModelVersion) *Prompt {
 		value := tag.GetValue()
 		switch key {
 		case tagPromptText:
-			p.Template = value
+			promptText = value
+		case tagPromptType:
+			promptType = value
+		case tagModelConfig:
+			modelConfigJSON = value
 		case tagDescription:
 			if value != "" {
-				p.Description = value
+				pv.CommitMessage = value
 			}
-		case tagIsPrompt, tagPromptType:
-			// Internal tags, don't expose
+		case tagIsPrompt:
+			// Internal tag, don't expose
 		default:
-			p.Tags[key] = value
+			// Check for alias tags
+			if strings.HasPrefix(key, aliasTagPrefix) {
+				// Skip alias tags in user tags
+			} else {
+				pv.Tags[key] = value
+			}
 		}
 	}
 
-	return p
-}
-
-// modelVersionToPromptWithoutTemplate converts a model version to a Prompt without loading template.
-// Used for listing operations where template content is not needed.
-func modelVersionToPromptWithoutTemplate(mv *mlflowpb.ModelVersion) Prompt {
-	if mv == nil {
-		return Prompt{}
+	// Parse template based on type
+	if promptType == promptTypeChat && promptText != "" {
+		var messages []ChatMessage
+		if err := json.Unmarshal([]byte(promptText), &messages); err == nil {
+			pv.Messages = messages
+		}
+	} else {
+		pv.Template = promptText
 	}
 
-	p := Prompt{
-		Name:        mv.GetName(),
-		Template:    "", // Intentionally empty for listings
-		Description: mv.GetDescription(),
-		Tags:        make(map[string]string),
+	// Parse model config
+	if modelConfigJSON != "" {
+		var config PromptModelConfig
+		if err := json.Unmarshal([]byte(modelConfigJSON), &config); err == nil {
+			pv.ModelConfig = &config
+		}
+	}
+
+	return pv
+}
+
+// modelVersionToPromptVersionWithoutTemplate converts a model version to a PromptVersion without loading template.
+// Used for listing operations where template content is not needed.
+func modelVersionToPromptVersionWithoutTemplate(mv *mlflowpb.ModelVersion) PromptVersion {
+	if mv == nil {
+		return PromptVersion{}
+	}
+
+	pv := PromptVersion{
+		Name:          mv.GetName(),
+		CommitMessage: mv.GetDescription(),
+		Tags:          make(map[string]string),
 	}
 
 	// Parse version
 	if v, err := strconv.Atoi(mv.GetVersion()); err == nil {
-		p.Version = v
+		pv.Version = v
 	}
 
 	// Convert timestamps
 	if mv.CreationTimestamp != nil && *mv.CreationTimestamp > 0 {
-		p.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
+		pv.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
 	}
 	if mv.LastUpdatedTimestamp != nil && *mv.LastUpdatedTimestamp > 0 {
-		p.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
+		pv.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
 	}
 
 	// Process tags (filter out internal ones including template)
@@ -204,46 +276,45 @@ func modelVersionToPromptWithoutTemplate(mv *mlflowpb.ModelVersion) Prompt {
 		key := tag.GetKey()
 		value := tag.GetValue()
 		switch key {
-		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription:
+		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription, tagModelConfig:
 			// Internal tags, don't expose
 		default:
-			p.Tags[key] = value
+			if !strings.HasPrefix(key, aliasTagPrefix) {
+				pv.Tags[key] = value
+			}
 		}
 	}
 
-	// Check for description in tags (takes precedence)
+	// Check for commit message in tags (takes precedence)
 	for _, tag := range mv.Tags {
 		if tag.GetKey() == tagDescription && tag.GetValue() != "" {
-			p.Description = tag.GetValue()
+			pv.CommitMessage = tag.GetValue()
 			break
 		}
 	}
 
-	return p
+	return pv
 }
 
-func registeredModelToPromptInfo(rm *mlflowpb.RegisteredModel) PromptInfo {
+func registeredModelToPrompt(rm *mlflowpb.RegisteredModel) Prompt {
 	if rm == nil {
-		return PromptInfo{}
+		return Prompt{}
 	}
 
-	info := PromptInfo{
+	p := Prompt{
 		Name:        rm.GetName(),
 		Description: rm.GetDescription(),
 		Tags:        make(map[string]string),
 	}
 
 	if rm.CreationTimestamp != nil && *rm.CreationTimestamp > 0 {
-		info.CreatedAt = time.UnixMilli(*rm.CreationTimestamp)
-	}
-	if rm.LastUpdatedTimestamp != nil && *rm.LastUpdatedTimestamp > 0 {
-		info.UpdatedAt = time.UnixMilli(*rm.LastUpdatedTimestamp)
+		p.CreationTimestamp = time.UnixMilli(*rm.CreationTimestamp)
 	}
 
 	// Get latest version number
 	if len(rm.LatestVersions) > 0 {
 		if v, err := strconv.Atoi(rm.LatestVersions[0].GetVersion()); err == nil {
-			info.LatestVersion = v
+			p.LatestVersion = v
 		}
 	}
 
@@ -255,17 +326,19 @@ func registeredModelToPromptInfo(rm *mlflowpb.RegisteredModel) PromptInfo {
 		case tagIsPrompt, tagPromptType:
 			// Internal tags, don't expose
 		default:
-			info.Tags[key] = value
+			if !strings.HasPrefix(key, aliasTagPrefix) {
+				p.Tags[key] = value
+			}
 		}
 	}
 
-	return info
+	return p
 }
 
-// RegisterPrompt registers a prompt in the registry.
+// RegisterPrompt registers a text prompt in the registry.
 // If the prompt doesn't exist, it creates a new one with version 1.
 // If the prompt exists, it creates a new version.
-func (c *Client) RegisterPrompt(ctx context.Context, name, template string, opts ...RegisterOption) (*Prompt, error) {
+func (c *Client) RegisterPrompt(ctx context.Context, name, template string, opts ...RegisterOption) (*PromptVersion, error) {
 	if name == "" {
 		return nil, fmt.Errorf("mlflow: prompt name is required")
 	}
@@ -284,7 +357,32 @@ func (c *Client) RegisterPrompt(ctx context.Context, name, template string, opts
 	}
 
 	// Step 2: Create a new ModelVersion with the template
-	return c.createModelVersion(ctx, name, template, regOpts)
+	return c.createTextPromptVersion(ctx, name, template, regOpts)
+}
+
+// RegisterChatPrompt registers a chat prompt in the registry.
+// If the prompt doesn't exist, it creates a new one with version 1.
+// If the prompt exists, it creates a new version.
+func (c *Client) RegisterChatPrompt(ctx context.Context, name string, messages []ChatMessage, opts ...RegisterOption) (*PromptVersion, error) {
+	if name == "" {
+		return nil, fmt.Errorf("mlflow: prompt name is required")
+	}
+	if len(messages) == 0 {
+		return nil, fmt.Errorf("mlflow: at least one message is required for chat prompts")
+	}
+
+	regOpts := &registerOptions{}
+	for _, opt := range opts {
+		opt(regOpts)
+	}
+
+	// Step 1: Ensure the RegisteredModel exists
+	if err := c.ensureRegisteredModel(ctx, name); err != nil {
+		return nil, err
+	}
+
+	// Step 2: Create a new ModelVersion with the chat messages
+	return c.createChatPromptVersion(ctx, name, messages, regOpts)
 }
 
 // ensureRegisteredModel creates the RegisteredModel if it doesn't exist.
@@ -310,13 +408,22 @@ func (c *Client) ensureRegisteredModel(ctx context.Context, name string) error {
 	return nil
 }
 
-// createModelVersion creates a new version of the prompt with the template.
-func (c *Client) createModelVersion(ctx context.Context, name, template string, opts *registerOptions) (*Prompt, error) {
+// createTextPromptVersion creates a new version of the prompt with a text template.
+func (c *Client) createTextPromptVersion(ctx context.Context, name, template string, opts *registerOptions) (*PromptVersion, error) {
 	// Build tags for the version
 	tags := []*mlflowpb.ModelVersionTag{
 		{Key: ptr(tagPromptText), Value: ptr(template)},
-		{Key: ptr(tagPromptType), Value: ptr("text")},
+		{Key: ptr(tagPromptType), Value: ptr(promptTypeText)},
 		{Key: ptr(tagIsPrompt), Value: ptr("true")},
+	}
+
+	// Add model config if provided
+	if opts.modelConfig != nil {
+		configJSON, err := json.Marshal(opts.modelConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize model config: %w", err)
+		}
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(tagModelConfig), Value: ptr(string(configJSON))})
 	}
 
 	// Add user-provided tags
@@ -328,7 +435,7 @@ func (c *Client) createModelVersion(ctx context.Context, name, template string, 
 	req := &mlflowpb.CreateModelVersion{
 		Name:        &name,
 		Source:      &source,
-		Description: &opts.description,
+		Description: &opts.commitMessage,
 		Tags:        tags,
 	}
 
@@ -339,7 +446,54 @@ func (c *Client) createModelVersion(ctx context.Context, name, template string, 
 		return nil, fmt.Errorf("failed to create prompt version: %w", err)
 	}
 
-	return modelVersionToPrompt(resp.ModelVersion), nil
+	return modelVersionToPromptVersion(resp.ModelVersion), nil
+}
+
+// createChatPromptVersion creates a new version of the prompt with chat messages.
+func (c *Client) createChatPromptVersion(ctx context.Context, name string, messages []ChatMessage, opts *registerOptions) (*PromptVersion, error) {
+	// Serialize messages to JSON
+	messagesJSON, err := json.Marshal(messages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize chat messages: %w", err)
+	}
+
+	// Build tags for the version
+	tags := []*mlflowpb.ModelVersionTag{
+		{Key: ptr(tagPromptText), Value: ptr(string(messagesJSON))},
+		{Key: ptr(tagPromptType), Value: ptr(promptTypeChat)},
+		{Key: ptr(tagIsPrompt), Value: ptr("true")},
+	}
+
+	// Add model config if provided
+	if opts.modelConfig != nil {
+		configJSON, err := json.Marshal(opts.modelConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize model config: %w", err)
+		}
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(tagModelConfig), Value: ptr(string(configJSON))})
+	}
+
+	// Add user-provided tags
+	for k, v := range opts.tags {
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(k), Value: ptr(v)})
+	}
+
+	source := "mlflow-artifacts:/" + name
+	req := &mlflowpb.CreateModelVersion{
+		Name:        &name,
+		Source:      &source,
+		Description: &opts.commitMessage,
+		Tags:        tags,
+	}
+
+	var resp mlflowpb.CreateModelVersion_Response
+
+	err = c.transport.Post(ctx, "/api/2.0/mlflow/model-versions/create", req, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prompt version: %w", err)
+	}
+
+	return modelVersionToPromptVersion(resp.ModelVersion), nil
 }
 
 // ListPrompts returns prompts matching the criteria.
@@ -374,12 +528,12 @@ func (c *Client) ListPrompts(ctx context.Context, opts ...ListPromptsOption) (*P
 	}
 
 	result := &PromptList{
-		Prompts:       make([]PromptInfo, 0, len(resp.RegisteredModels)),
+		Prompts:       make([]Prompt, 0, len(resp.RegisteredModels)),
 		NextPageToken: resp.GetNextPageToken(),
 	}
 
 	for _, rm := range resp.RegisteredModels {
-		result.Prompts = append(result.Prompts, registeredModelToPromptInfo(rm))
+		result.Prompts = append(result.Prompts, registeredModelToPrompt(rm))
 	}
 
 	return result, nil
@@ -439,13 +593,13 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 		}
 
 		if latestVersion == 0 {
-			return &PromptVersionList{Versions: []Prompt{}}, nil
+			return &PromptVersionList{Versions: []PromptVersion{}}, nil
 		}
 	}
 
 	// Fetch each version individually (workaround for broken search endpoint)
 	result := &PromptVersionList{
-		Versions: make([]Prompt, 0, latestVersion),
+		Versions: make([]PromptVersion, 0, latestVersion),
 	}
 
 	for v := latestVersion; v >= 1; v-- {
@@ -468,10 +622,65 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 			return nil, fmt.Errorf("failed to get version %d: %w", v, err)
 		}
 
-		result.Versions = append(result.Versions, modelVersionToPromptWithoutTemplate(resp.ModelVersion))
+		result.Versions = append(result.Versions, modelVersionToPromptVersionWithoutTemplate(resp.ModelVersion))
 	}
 
 	return result, nil
+}
+
+// SetPromptAlias sets an alias for a specific version of a prompt.
+func (c *Client) SetPromptAlias(ctx context.Context, name, alias string, version int) error {
+	if name == "" {
+		return fmt.Errorf("mlflow: prompt name is required")
+	}
+	if alias == "" {
+		return fmt.Errorf("mlflow: alias is required")
+	}
+	if version <= 0 {
+		return fmt.Errorf("mlflow: version must be positive")
+	}
+
+	tagKey := aliasTagPrefix + alias
+	tagValue := strconv.Itoa(version)
+
+	req := &mlflowpb.SetRegisteredModelTag{
+		Name:  &name,
+		Key:   &tagKey,
+		Value: &tagValue,
+	}
+
+	var resp mlflowpb.SetRegisteredModelTag_Response
+	err := c.transport.Post(ctx, "/api/2.0/mlflow/registered-models/set-tag", req, &resp)
+	if err != nil {
+		return fmt.Errorf("failed to set alias: %w", err)
+	}
+
+	return nil
+}
+
+// DeletePromptAlias removes an alias from a prompt.
+func (c *Client) DeletePromptAlias(ctx context.Context, name, alias string) error {
+	if name == "" {
+		return fmt.Errorf("mlflow: prompt name is required")
+	}
+	if alias == "" {
+		return fmt.Errorf("mlflow: alias is required")
+	}
+
+	tagKey := aliasTagPrefix + alias
+
+	req := &mlflowpb.DeleteRegisteredModelTag{
+		Name: &name,
+		Key:  &tagKey,
+	}
+
+	var resp mlflowpb.DeleteRegisteredModelTag_Response
+	err := c.transport.Delete(ctx, "/api/2.0/mlflow/registered-models/delete-tag", req, &resp)
+	if err != nil {
+		return fmt.Errorf("failed to delete alias: %w", err)
+	}
+
+	return nil
 }
 
 // escapeFilterKey escapes backticks in filter keys to prevent injection.

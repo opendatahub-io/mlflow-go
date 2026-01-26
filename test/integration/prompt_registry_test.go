@@ -34,7 +34,7 @@ func TestPromptLifecycle(t *testing.T) {
 	t.Log("Step 1: Registering new prompt")
 	v1, err := client.PromptRegistry().RegisterPrompt(ctx, promptName,
 		"Hello {{name}}!",
-		promptregistry.WithDescription("Initial version"),
+		promptregistry.WithCommitMessage("Initial version"),
 		promptregistry.WithTags(map[string]string{"test": "e2e"}),
 	)
 	if err != nil {
@@ -70,7 +70,7 @@ func TestPromptLifecycle(t *testing.T) {
 	t.Log("Step 3: Modifying and registering new version")
 	modified := loaded.
 		WithTemplate("Hello {{name}}, welcome to {{company}}!").
-		WithDescription("Added company variable")
+		WithCommitMessage("Added company variable")
 
 	// Verify original is unchanged
 	if loaded.Template != "Hello {{name}}!" {
@@ -79,7 +79,7 @@ func TestPromptLifecycle(t *testing.T) {
 
 	v2, err := client.PromptRegistry().RegisterPrompt(ctx, promptName,
 		modified.Template,
-		promptregistry.WithDescription(modified.Description),
+		promptregistry.WithCommitMessage(modified.CommitMessage),
 	)
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v2 error = %v", err)
@@ -286,19 +286,19 @@ func TestListPromptVersions(t *testing.T) {
 	promptName := fmt.Sprintf("e2e-versions-test-%d", time.Now().UnixNano())
 
 	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 1 template",
-		promptregistry.WithDescription("First version"))
+		promptregistry.WithCommitMessage("First version"))
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v1 error = %v", err)
 	}
 
 	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 2 template",
-		promptregistry.WithDescription("Second version"))
+		promptregistry.WithCommitMessage("Second version"))
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v2 error = %v", err)
 	}
 
 	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 3 template",
-		promptregistry.WithDescription("Third version"))
+		promptregistry.WithCommitMessage("Third version"))
 	if err != nil {
 		t.Fatalf("RegisterPrompt() v3 error = %v", err)
 	}
@@ -323,10 +323,10 @@ func TestListPromptVersions(t *testing.T) {
 		}
 	}
 
-	// Verify descriptions are present
+	// Verify commit messages are present
 	for _, v := range versions.Versions {
-		if v.Description == "" {
-			t.Errorf("Version %d has empty description", v.Version)
+		if v.CommitMessage == "" {
+			t.Errorf("Version %d has empty commit message", v.Version)
 		}
 	}
 

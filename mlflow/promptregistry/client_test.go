@@ -100,8 +100,8 @@ func TestLoadPrompt_Success(t *testing.T) {
 	if prompt.Template != "Hello, {{name}}!" {
 		t.Errorf("Template = %q, want %q", prompt.Template, "Hello, {{name}}!")
 	}
-	if prompt.Description != "A test prompt" {
-		t.Errorf("Description = %q, want %q", prompt.Description, "A test prompt")
+	if prompt.CommitMessage != "A test prompt" {
+		t.Errorf("CommitMessage = %q, want %q", prompt.CommitMessage, "A test prompt")
 	}
 	if prompt.Tags["team"] != "ml" {
 		t.Errorf("Tags[team] = %q, want %q", prompt.Tags["team"], "ml")
@@ -227,7 +227,7 @@ func TestRegisterPrompt_NewPrompt(t *testing.T) {
 		context.Background(),
 		"new-prompt",
 		"Hello, {{name}}!",
-		WithDescription("First version"),
+		WithCommitMessage("First version"),
 	)
 	if err != nil {
 		t.Fatalf("RegisterPrompt() error = %v", err)

@@ -3,6 +3,7 @@ package promptregistry
 // loadOptions holds the configuration for a LoadPrompt call.
 type loadOptions struct {
 	version int
+	alias   string
 }
 
 // LoadOption configures a LoadPrompt call.
@@ -16,19 +17,28 @@ func WithVersion(version int) LoadOption {
 	}
 }
 
+// WithAlias specifies the alias to load (e.g., "production", "staging").
+// Takes precedence over WithVersion if both are specified.
+func WithAlias(alias string) LoadOption {
+	return func(o *loadOptions) {
+		o.alias = alias
+	}
+}
+
 // registerOptions holds the configuration for a RegisterPrompt call.
 type registerOptions struct {
-	description string
-	tags        map[string]string
+	commitMessage string
+	tags          map[string]string
+	modelConfig   *PromptModelConfig
 }
 
 // RegisterOption configures a RegisterPrompt call.
 type RegisterOption func(*registerOptions)
 
-// WithDescription sets the version description.
-func WithDescription(description string) RegisterOption {
+// WithCommitMessage sets the version commit message.
+func WithCommitMessage(msg string) RegisterOption {
 	return func(o *registerOptions) {
-		o.description = description
+		o.commitMessage = msg
 	}
 }
 
@@ -36,6 +46,13 @@ func WithDescription(description string) RegisterOption {
 func WithTags(tags map[string]string) RegisterOption {
 	return func(o *registerOptions) {
 		o.tags = tags
+	}
+}
+
+// WithModelConfig sets the model configuration for the prompt.
+func WithModelConfig(config *PromptModelConfig) RegisterOption {
+	return func(o *registerOptions) {
+		o.modelConfig = config
 	}
 }
 
