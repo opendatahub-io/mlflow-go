@@ -339,3 +339,190 @@ func TestListPromptVersions(t *testing.T) {
 
 	t.Logf("Listed %d versions of %s", len(versions.Versions), promptName)
 }
+
+// TestDeletePromptVersion tests deleting a specific version.
+func TestDeletePromptVersion(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := context.Background()
+	promptName := fmt.Sprintf("e2e-delete-version-%d", time.Now().UnixNano())
+
+	// Create prompt with 2 versions
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 1",
+		promptregistry.WithCommitMessage("First"))
+	if err != nil {
+		t.Fatalf("RegisterPrompt() v1 error = %v", err)
+	}
+
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 2",
+		promptregistry.WithCommitMessage("Second"))
+	if err != nil {
+		t.Fatalf("RegisterPrompt() v2 error = %v", err)
+	}
+
+	// Delete version 1
+	err = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+	if err != nil {
+		t.Fatalf("DeletePromptVersion() error = %v", err)
+	}
+
+	// Verify v1 is gone
+	_, err = client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithVersion(1))
+	if !mlflow.IsNotFound(err) {
+		t.Errorf("Expected IsNotFound for deleted version, got: %v", err)
+	}
+
+	// Verify v2 still exists
+	v2, err := client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithVersion(2))
+	if err != nil {
+		t.Fatalf("LoadPrompt(v2) error = %v", err)
+	}
+	if v2.Version != 2 {
+		t.Errorf("Expected version 2, got %d", v2.Version)
+	}
+
+	// Cleanup
+	_ = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 2)
+	_ = client.PromptRegistry().DeletePrompt(ctx, promptName)
+
+	t.Log("DeletePromptVersion test passed")
+}
+
+// TestDeletePrompt tests deleting an entire prompt.
+func TestDeletePrompt(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := context.Background()
+	promptName := fmt.Sprintf("e2e-delete-prompt-%d", time.Now().UnixNano())
+
+	// Create prompt
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Template")
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	// Delete version first (required)
+	err = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+	if err != nil {
+		t.Fatalf("DeletePromptVersion() error = %v", err)
+	}
+
+	// Delete prompt
+	err = client.PromptRegistry().DeletePrompt(ctx, promptName)
+	if err != nil {
+		t.Fatalf("DeletePrompt() error = %v", err)
+	}
+
+	// Verify prompt is gone
+	_, err = client.PromptRegistry().LoadPrompt(ctx, promptName)
+	if !mlflow.IsNotFound(err) {
+		t.Errorf("Expected IsNotFound for deleted prompt, got: %v", err)
+	}
+
+	t.Log("DeletePrompt test passed")
+}
+
+// TestDeletePromptVersionTag tests deleting a tag from a prompt version.
+func TestDeletePromptVersionTag(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := context.Background()
+	promptName := fmt.Sprintf("e2e-delete-vtag-%d", time.Now().UnixNano())
+
+	// Create prompt with tags
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Template",
+		promptregistry.WithTags(map[string]string{
+			"keep":   "this",
+			"delete": "this",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	// Delete tag from version 1
+	err = client.PromptRegistry().DeletePromptVersionTag(ctx, promptName, 1, "delete")
+	if err != nil {
+		t.Fatalf("DeletePromptVersionTag() error = %v", err)
+	}
+
+	// Load and verify tags on version 1
+	loaded, err := client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithVersion(1))
+	if err != nil {
+		t.Fatalf("LoadPrompt(v1) error = %v", err)
+	}
+
+	if loaded.Tags["keep"] != "this" {
+		t.Errorf("Tags[keep] = %q, want %q", loaded.Tags["keep"], "this")
+	}
+	if _, ok := loaded.Tags["delete"]; ok {
+		t.Error("Tag 'delete' should have been removed from version")
+	}
+
+	// Cleanup
+	_ = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+	_ = client.PromptRegistry().DeletePrompt(ctx, promptName)
+
+	t.Log("DeletePromptVersionTag test passed")
+}
+
+// TestDeletePromptVersionWithAlias tests alias conflict error.
+// Note: MLflow OSS does not enforce alias conflict protection, so this test
+// verifies the behavior and skips the conflict check if not supported.
+func TestDeletePromptVersionWithAlias(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx := context.Background()
+	promptName := fmt.Sprintf("e2e-alias-conflict-%d", time.Now().UnixNano())
+
+	// Create prompt
+	_, err = client.PromptRegistry().RegisterPrompt(ctx, promptName, "Template")
+	if err != nil {
+		t.Fatalf("RegisterPrompt() error = %v", err)
+	}
+
+	// Set alias on version 1
+	err = client.PromptRegistry().SetPromptAlias(ctx, promptName, "production", 1)
+	if err != nil {
+		t.Fatalf("SetPromptAlias() error = %v", err)
+	}
+
+	// Try to delete version with alias
+	err = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+	if mlflow.IsAliasConflict(err) {
+		// Databricks MLflow enforces alias conflict - test the full workflow
+		t.Log("Alias conflict enforced, testing removal workflow")
+
+		err = client.PromptRegistry().DeletePromptAlias(ctx, promptName, "production")
+		if err != nil {
+			t.Fatalf("DeletePromptAlias() error = %v", err)
+		}
+
+		err = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+		if err != nil {
+			t.Fatalf("DeletePromptVersion() after alias removal error = %v", err)
+		}
+	} else if err != nil {
+		t.Fatalf("DeletePromptVersion() error = %v", err)
+	} else {
+		// MLflow OSS allows deletion even with aliases
+		t.Log("MLflow OSS: alias conflict not enforced, version deleted directly")
+	}
+
+	// Cleanup
+	_ = client.PromptRegistry().DeletePrompt(ctx, promptName)
+
+	t.Log("DeletePromptVersionWithAlias test passed")
+}

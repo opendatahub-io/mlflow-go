@@ -719,3 +719,375 @@ func TestListPromptVersions_EmptyName(t *testing.T) {
 		t.Error("expected error for empty name")
 	}
 }
+
+func TestDeletePromptVersion_Success(t *testing.T) {
+	var deleteCalled bool
+	var receivedName, receivedVersion string
+
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path != "/api/2.0/mlflow/model-versions/delete" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodDelete {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		deleteCalled = true
+		var req struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		receivedName = req.Name
+		receivedVersion = req.Version
+
+		json.NewEncoder(w).Encode(map[string]any{})
+	}))
+
+	err := client.DeletePromptVersion(context.Background(), "test-prompt", 2)
+	if err != nil {
+		t.Fatalf("DeletePromptVersion() error = %v", err)
+	}
+
+	if !deleteCalled {
+		t.Error("expected delete endpoint to be called")
+	}
+	if receivedName != "test-prompt" {
+		t.Errorf("name = %q, want %q", receivedName, "test-prompt")
+	}
+	if receivedVersion != "2" {
+		t.Errorf("version = %q, want %q", receivedVersion, "2")
+	}
+}
+
+func TestDeletePromptVersion_NotFound(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "RESOURCE_DOES_NOT_EXIST",
+			"message":    "Model version not found",
+		})
+	}))
+
+	err := client.DeletePromptVersion(context.Background(), "test-prompt", 99)
+	if err == nil {
+		t.Error("expected error for non-existent version")
+	}
+	if !errors.IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
+	}
+}
+
+func TestDeletePromptVersion_EmptyName(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePromptVersion(context.Background(), "", 1)
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+func TestDeletePromptVersion_InvalidVersion(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePromptVersion(context.Background(), "test-prompt", 0)
+	if err == nil {
+		t.Error("expected error for zero version")
+	}
+
+	err = client.DeletePromptVersion(context.Background(), "test-prompt", -1)
+	if err == nil {
+		t.Error("expected error for negative version")
+	}
+}
+
+func TestDeletePromptVersion_AliasConflict(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "ALIAS_EXISTS",
+			"message":    "Cannot delete version with alias",
+		})
+	}))
+
+	err := client.DeletePromptVersion(context.Background(), "test-prompt", 1)
+	if err == nil {
+		t.Error("expected error for alias conflict")
+	}
+	if !errors.IsAliasConflict(err) {
+		t.Errorf("expected IsAliasConflict, got %v", err)
+	}
+}
+
+func TestDeletePrompt_Success(t *testing.T) {
+	var deleteCalled bool
+	var receivedName string
+
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path != "/api/2.0/mlflow/registered-models/delete" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodDelete {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		deleteCalled = true
+		var req struct {
+			Name string `json:"name"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		receivedName = req.Name
+
+		json.NewEncoder(w).Encode(map[string]any{})
+	}))
+
+	err := client.DeletePrompt(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("DeletePrompt() error = %v", err)
+	}
+
+	if !deleteCalled {
+		t.Error("expected delete endpoint to be called")
+	}
+	if receivedName != "test-prompt" {
+		t.Errorf("name = %q, want %q", receivedName, "test-prompt")
+	}
+}
+
+func TestDeletePrompt_NotFound(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "RESOURCE_DOES_NOT_EXIST",
+			"message":    "Registered Model not found",
+		})
+	}))
+
+	err := client.DeletePrompt(context.Background(), "nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent prompt")
+	}
+	if !errors.IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
+	}
+}
+
+func TestDeletePrompt_EmptyName(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePrompt(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+func TestDeletePrompt_PermissionDenied(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "PERMISSION_DENIED",
+			"message":    "User lacks permission to delete",
+		})
+	}))
+
+	err := client.DeletePrompt(context.Background(), "test-prompt")
+	if err == nil {
+		t.Error("expected error for permission denied")
+	}
+	if !errors.IsPermissionDenied(err) {
+		t.Errorf("expected IsPermissionDenied, got %v", err)
+	}
+}
+
+func TestDeletePromptTag_Success(t *testing.T) {
+	var deleteCalled bool
+	var receivedName, receivedKey string
+
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path != "/api/2.0/mlflow/registered-models/delete-tag" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodDelete {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		deleteCalled = true
+		var req struct {
+			Name string `json:"name"`
+			Key  string `json:"key"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		receivedName = req.Name
+		receivedKey = req.Key
+
+		json.NewEncoder(w).Encode(map[string]any{})
+	}))
+
+	err := client.DeletePromptTag(context.Background(), "test-prompt", "environment")
+	if err != nil {
+		t.Fatalf("DeletePromptTag() error = %v", err)
+	}
+
+	if !deleteCalled {
+		t.Error("expected delete endpoint to be called")
+	}
+	if receivedName != "test-prompt" {
+		t.Errorf("name = %q, want %q", receivedName, "test-prompt")
+	}
+	if receivedKey != "environment" {
+		t.Errorf("key = %q, want %q", receivedKey, "environment")
+	}
+}
+
+func TestDeletePromptTag_NotFound(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "RESOURCE_DOES_NOT_EXIST",
+			"message":    "Tag not found",
+		})
+	}))
+
+	err := client.DeletePromptTag(context.Background(), "test-prompt", "missing")
+	if err == nil {
+		t.Error("expected error for non-existent tag")
+	}
+	if !errors.IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
+	}
+}
+
+func TestDeletePromptTag_EmptyName(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePromptTag(context.Background(), "", "key")
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+func TestDeletePromptTag_EmptyKey(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePromptTag(context.Background(), "test-prompt", "")
+	if err == nil {
+		t.Error("expected error for empty key")
+	}
+}
+
+func TestDeletePromptVersionTag_Success(t *testing.T) {
+	var deleteCalled bool
+	var receivedName, receivedVersion, receivedKey string
+
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path != "/api/2.0/mlflow/model-versions/delete-tag" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodDelete {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+
+		deleteCalled = true
+		var req struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+			Key     string `json:"key"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		receivedName = req.Name
+		receivedVersion = req.Version
+		receivedKey = req.Key
+
+		json.NewEncoder(w).Encode(map[string]any{})
+	}))
+
+	err := client.DeletePromptVersionTag(context.Background(), "test-prompt", 1, "reviewed")
+	if err != nil {
+		t.Fatalf("DeletePromptVersionTag() error = %v", err)
+	}
+
+	if !deleteCalled {
+		t.Error("expected delete endpoint to be called")
+	}
+	if receivedName != "test-prompt" {
+		t.Errorf("name = %q, want %q", receivedName, "test-prompt")
+	}
+	if receivedVersion != "1" {
+		t.Errorf("version = %q, want %q", receivedVersion, "1")
+	}
+	if receivedKey != "reviewed" {
+		t.Errorf("key = %q, want %q", receivedKey, "reviewed")
+	}
+}
+
+func TestDeletePromptVersionTag_NotFound(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "RESOURCE_DOES_NOT_EXIST",
+			"message":    "Tag not found",
+		})
+	}))
+
+	err := client.DeletePromptVersionTag(context.Background(), "test-prompt", 1, "missing")
+	if err == nil {
+		t.Error("expected error for non-existent tag")
+	}
+	if !errors.IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
+	}
+}
+
+func TestDeletePromptVersionTag_EmptyName(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePromptVersionTag(context.Background(), "", 1, "key")
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+func TestDeletePromptVersionTag_InvalidVersion(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePromptVersionTag(context.Background(), "test-prompt", 0, "key")
+	if err == nil {
+		t.Error("expected error for zero version")
+	}
+
+	err = client.DeletePromptVersionTag(context.Background(), "test-prompt", -1, "key")
+	if err == nil {
+		t.Error("expected error for negative version")
+	}
+}
+
+func TestDeletePromptVersionTag_EmptyKey(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	err := client.DeletePromptVersionTag(context.Background(), "test-prompt", 1, "")
+	if err == nil {
+		t.Error("expected error for empty key")
+	}
+}

@@ -683,6 +683,101 @@ func (c *Client) DeletePromptAlias(ctx context.Context, name, alias string) erro
 	return nil
 }
 
+// DeletePromptVersion deletes a specific version of a prompt from the registry.
+func (c *Client) DeletePromptVersion(ctx context.Context, name string, version int) error {
+	if name == "" {
+		return fmt.Errorf("mlflow: prompt name is required")
+	}
+	if version <= 0 {
+		return fmt.Errorf("mlflow: version must be positive")
+	}
+
+	versionStr := strconv.Itoa(version)
+	req := &mlflowpb.DeleteModelVersion{
+		Name:    &name,
+		Version: &versionStr,
+	}
+
+	var resp mlflowpb.DeleteModelVersion_Response
+	err := c.transport.Delete(ctx, "/api/2.0/mlflow/model-versions/delete", req, &resp)
+	if err != nil {
+		return fmt.Errorf("failed to delete prompt version: %w", err)
+	}
+
+	return nil
+}
+
+// DeletePrompt deletes a prompt from the registry.
+// Fails if the prompt has any versions. Delete all versions first.
+func (c *Client) DeletePrompt(ctx context.Context, name string) error {
+	if name == "" {
+		return fmt.Errorf("mlflow: prompt name is required")
+	}
+
+	req := &mlflowpb.DeleteRegisteredModel{
+		Name: &name,
+	}
+
+	var resp mlflowpb.DeleteRegisteredModel_Response
+	err := c.transport.Delete(ctx, "/api/2.0/mlflow/registered-models/delete", req, &resp)
+	if err != nil {
+		return fmt.Errorf("failed to delete prompt: %w", err)
+	}
+
+	return nil
+}
+
+// DeletePromptTag removes a tag from a prompt.
+func (c *Client) DeletePromptTag(ctx context.Context, name, key string) error {
+	if name == "" {
+		return fmt.Errorf("mlflow: prompt name is required")
+	}
+	if key == "" {
+		return fmt.Errorf("mlflow: tag key is required")
+	}
+
+	req := &mlflowpb.DeleteRegisteredModelTag{
+		Name: &name,
+		Key:  &key,
+	}
+
+	var resp mlflowpb.DeleteRegisteredModelTag_Response
+	err := c.transport.Delete(ctx, "/api/2.0/mlflow/registered-models/delete-tag", req, &resp)
+	if err != nil {
+		return fmt.Errorf("failed to delete prompt tag: %w", err)
+	}
+
+	return nil
+}
+
+// DeletePromptVersionTag removes a tag from a specific prompt version.
+func (c *Client) DeletePromptVersionTag(ctx context.Context, name string, version int, key string) error {
+	if name == "" {
+		return fmt.Errorf("mlflow: prompt name is required")
+	}
+	if version <= 0 {
+		return fmt.Errorf("mlflow: version must be positive")
+	}
+	if key == "" {
+		return fmt.Errorf("mlflow: tag key is required")
+	}
+
+	versionStr := strconv.Itoa(version)
+	req := &mlflowpb.DeleteModelVersionTag{
+		Name:    &name,
+		Version: &versionStr,
+		Key:     &key,
+	}
+
+	var resp mlflowpb.DeleteModelVersionTag_Response
+	err := c.transport.Delete(ctx, "/api/2.0/mlflow/model-versions/delete-tag", req, &resp)
+	if err != nil {
+		return fmt.Errorf("failed to delete prompt version tag: %w", err)
+	}
+
+	return nil
+}
+
 // escapeFilterKey escapes backticks in filter keys to prevent injection.
 func escapeFilterKey(s string) string {
 	return strings.ReplaceAll(s, "`", "``")

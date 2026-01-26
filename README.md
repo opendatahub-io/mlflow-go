@@ -9,6 +9,7 @@ A Go SDK for [MLflow](https://mlflow.org). Currently supports the Prompt Registr
 - Load prompts by name (latest or specific version)
 - List prompts and versions with filtering and pagination
 - Register text prompts and chat prompts (with model configuration)
+- Delete prompts, versions, and tags
 - Format prompts with variable substitution
 - Modify prompts locally with immutable operations
 
@@ -124,6 +125,29 @@ err := client.PromptRegistry().SetPromptAlias(ctx, "my-prompt", "production", 3)
 
 // Delete an alias
 err := client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "staging")
+```
+
+### Delete Prompts and Versions
+
+```go
+// Delete a specific version
+err := client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", 2)
+if mlflow.IsAliasConflict(err) {
+    // Must remove aliases pointing to this version first
+    client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "production")
+    err = client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", 2)
+}
+
+// Delete all versions, then delete the prompt
+// (Prompt deletion fails if versions exist)
+for i := 1; i <= 3; i++ {
+    client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", i)
+}
+err := client.PromptRegistry().DeletePrompt(ctx, "my-prompt")
+
+// Delete tags
+err := client.PromptRegistry().DeletePromptTag(ctx, "my-prompt", "environment")
+err := client.PromptRegistry().DeletePromptVersionTag(ctx, "my-prompt", 1, "reviewed")
 ```
 
 ### List All Prompts
@@ -285,6 +309,8 @@ if err != nil {
         fmt.Println("Invalid token")
     case mlflow.IsPermissionDenied(err):
         fmt.Println("Access denied")
+    case mlflow.IsAliasConflict(err):
+        fmt.Println("Cannot delete: aliases point to this version")
     default:
         var apiErr *mlflow.APIError
         if errors.As(err, &apiErr) {
@@ -309,9 +335,10 @@ This Go SDK covers the core Prompt Registry functionality. Some advanced feature
 | Version and alias management | ✅ Supported |
 | List/search with filters | ✅ Supported |
 | Tags on registration | ✅ Supported |
-| Set/delete tags after creation | ❌ Not yet |
+| Delete prompts and versions | ✅ Supported |
+| Delete tags | ✅ Supported |
+| Set/update tags after creation | ❌ Not yet |
 | Update model config after creation | ❌ Not yet |
-| Delete prompt versions | ❌ Not yet |
 | Jinja2 templates (conditionals, loops) | ❌ Not yet |
 | Response format specification | ❌ Not yet |
 | Cache TTL configuration | ❌ Not yet |

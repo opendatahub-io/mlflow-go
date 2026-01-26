@@ -198,6 +198,100 @@ func main() {
 		}
 	}
 
+	// === Path 8: Delete operations ===
+	fmt.Println("\n=== 8. Delete Operations: Cleaning up prompts ===")
+
+	// 8a: Delete a tag from the chat prompt
+	fmt.Println("\n=== 8a. DeletePromptTag: Removing 'type' tag ===")
+	err = client.PromptRegistry().DeletePromptTag(ctx, chatPromptName, "type")
+	if err != nil {
+		log.Fatalf("Failed to delete prompt tag: %v", err)
+	}
+	fmt.Printf("  Deleted 'type' tag from %s\n", chatPromptName)
+
+	// 8b: Delete a version tag (first we need to know tags exist on the version)
+	fmt.Println("\n=== 8b. DeletePromptVersionTag: Removing 'dogs' tag from version 1 ===")
+	err = client.PromptRegistry().DeletePromptVersionTag(ctx, chatPromptName, 1, "dogs")
+	if err != nil {
+		log.Fatalf("Failed to delete version tag: %v", err)
+	}
+	fmt.Printf("  Deleted 'dogs' tag from %s v1\n", chatPromptName)
+
+	// 8c: Delete the chat prompt version (only has 1 version)
+	fmt.Println("\n=== 8c. DeletePromptVersion: Deleting chat prompt version ===")
+	err = client.PromptRegistry().DeletePromptVersion(ctx, chatPromptName, 1)
+	if err != nil {
+		log.Fatalf("Failed to delete prompt version: %v", err)
+	}
+	fmt.Printf("  Deleted version 1 of %s\n", chatPromptName)
+
+	// Verify the deleted version returns NotFound
+	_, err = client.PromptRegistry().LoadPrompt(ctx, chatPromptName, promptregistry.WithVersion(1))
+	if !mlflow.IsNotFound(err) {
+		log.Fatalf("Expected NotFound error for deleted version, got: %v", err)
+	}
+	fmt.Printf("  Verified: loading deleted version returns NotFound\n")
+
+	// 8d: Delete the chat prompt (now has no versions)
+	fmt.Println("\n=== 8d. DeletePrompt: Deleting chat prompt ===")
+	err = client.PromptRegistry().DeletePrompt(ctx, chatPromptName)
+	if err != nil {
+		log.Fatalf("Failed to delete prompt: %v", err)
+	}
+	fmt.Printf("  Deleted prompt %s\n", chatPromptName)
+
+	// Verify the deleted prompt returns NotFound
+	_, err = client.PromptRegistry().LoadPrompt(ctx, chatPromptName)
+	if !mlflow.IsNotFound(err) {
+		log.Fatalf("Expected NotFound error for deleted prompt, got: %v", err)
+	}
+	fmt.Printf("  Verified: loading deleted prompt returns NotFound\n")
+
+	// 8e: Try to delete a version with an alias (demonstrates IsAliasConflict)
+	fmt.Println("\n=== 8e. DeletePromptVersion with alias: Handling alias conflict ===")
+	err = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+	if mlflow.IsAliasConflict(err) {
+		fmt.Printf("  Cannot delete %s v1: alias 'production' points to it\n", promptName)
+		fmt.Println("  Removing alias first...")
+		err = client.PromptRegistry().DeletePromptAlias(ctx, promptName, "production")
+		if err != nil {
+			log.Fatalf("Failed to delete alias: %v", err)
+		}
+		fmt.Println("  Deleted 'production' alias")
+
+		// Now delete the version
+		err = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+		if err != nil {
+			log.Fatalf("Failed to delete version after removing alias: %v", err)
+		}
+		fmt.Printf("  Deleted version 1 of %s\n", promptName)
+	} else if err != nil {
+		log.Fatalf("Failed to delete prompt version: %v", err)
+	} else {
+		fmt.Printf("  Deleted version 1 of %s (no alias conflict)\n", promptName)
+	}
+
+	// 8f: Delete remaining version and the prompt
+	fmt.Println("\n=== 8f. Cleanup: Deleting remaining versions and prompt ===")
+	err = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 2)
+	if err != nil {
+		log.Fatalf("Failed to delete version 2: %v", err)
+	}
+	fmt.Printf("  Deleted version 2 of %s\n", promptName)
+
+	err = client.PromptRegistry().DeletePrompt(ctx, promptName)
+	if err != nil {
+		log.Fatalf("Failed to delete prompt: %v", err)
+	}
+	fmt.Printf("  Deleted prompt %s\n", promptName)
+
+	// Verify the deleted prompt returns NotFound
+	_, err = client.PromptRegistry().LoadPrompt(ctx, promptName)
+	if !mlflow.IsNotFound(err) {
+		log.Fatalf("Expected NotFound error for deleted prompt, got: %v", err)
+	}
+	fmt.Printf("  Verified: loading deleted prompt returns NotFound\n")
+
 	fmt.Println("\n=== All operations completed successfully! ===")
 }
 

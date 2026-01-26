@@ -31,3 +31,9 @@ func IsInvalidArgument(err error) bool {
 func IsAlreadyExists(err error) bool {
 	return internalerrors.IsAlreadyExists(err)
 }
+
+// IsAliasConflict reports whether err indicates the operation failed
+// because aliases point to the resource (HTTP 409 Conflict without RESOURCE_ALREADY_EXISTS code).
+func IsAliasConflict(err error) bool {
+	return internalerrors.IsAliasConflict(err)
+}

@@ -240,3 +240,56 @@ func TestIsAlreadyExists(t *testing.T) {
 		})
 	}
 }
+
+func TestIsAliasConflict(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "APIError with 409 and no code",
+			err:      &APIError{StatusCode: http.StatusConflict, Message: "alias conflict"},
+			expected: true,
+		},
+		{
+			name:     "APIError with 409 and other code",
+			err:      &APIError{StatusCode: http.StatusConflict, Code: "ALIAS_EXISTS"},
+			expected: true,
+		},
+		{
+			name:     "APIError with 409 and RESOURCE_ALREADY_EXISTS code",
+			err:      &APIError{StatusCode: http.StatusConflict, Code: "RESOURCE_ALREADY_EXISTS"},
+			expected: false,
+		},
+		{
+			name:     "APIError with 400",
+			err:      &APIError{StatusCode: http.StatusBadRequest},
+			expected: false,
+		},
+		{
+			name:     "wrapped APIError with 409 and no code",
+			err:      fmt.Errorf("wrapped: %w", &APIError{StatusCode: http.StatusConflict}),
+			expected: true,
+		},
+		{
+			name:     "non-APIError",
+			err:      errors.New("conflict"),
+			expected: false,
+		},
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsAliasConflict(tt.err)
+			if got != tt.expected {
+				t.Errorf("IsAliasConflict() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
