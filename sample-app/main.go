@@ -201,13 +201,13 @@ func main() {
 	// === Path 8: Delete operations ===
 	fmt.Println("\n=== 8. Delete Operations: Cleaning up prompts ===")
 
-	// 8a: Delete a tag from the chat prompt
-	fmt.Println("\n=== 8a. DeletePromptTag: Removing 'type' tag ===")
-	err = client.PromptRegistry().DeletePromptTag(ctx, chatPromptName, "type")
+	// 8a: Delete a version tag from the chat prompt (tags were added at version level via WithTags)
+	fmt.Println("\n=== 8a. DeletePromptVersionTag: Removing 'type' tag from version 1 ===")
+	err = client.PromptRegistry().DeletePromptVersionTag(ctx, chatPromptName, 1, "type")
 	if err != nil {
-		log.Fatalf("Failed to delete prompt tag: %v", err)
+		log.Fatalf("Failed to delete prompt version tag: %v", err)
 	}
-	fmt.Printf("  Deleted 'type' tag from %s\n", chatPromptName)
+	fmt.Printf("  Deleted 'type' tag from %s v1\n", chatPromptName)
 
 	// 8b: Delete a version tag (first we need to know tags exist on the version)
 	fmt.Println("\n=== 8b. DeletePromptVersionTag: Removing 'dogs' tag from version 1 ===")

@@ -134,20 +134,20 @@ err := client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "staging")
 err := client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", 2)
 if mlflow.IsAliasConflict(err) {
     // Must remove aliases pointing to this version first
-    client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "production")
+    _ = client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "production")
     err = client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", 2)
 }
 
 // Delete all versions, then delete the prompt
 // (Prompt deletion fails if versions exist)
 for i := 1; i <= 3; i++ {
-    client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", i)
+    _ = client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", i)
 }
-err := client.PromptRegistry().DeletePrompt(ctx, "my-prompt")
+err = client.PromptRegistry().DeletePrompt(ctx, "my-prompt")
 
 // Delete tags
-err := client.PromptRegistry().DeletePromptTag(ctx, "my-prompt", "environment")
-err := client.PromptRegistry().DeletePromptVersionTag(ctx, "my-prompt", 1, "reviewed")
+err = client.PromptRegistry().DeletePromptTag(ctx, "my-prompt", "environment")
+err = client.PromptRegistry().DeletePromptVersionTag(ctx, "my-prompt", 1, "reviewed")
 ```
 
 ### List All Prompts
