@@ -9,7 +9,7 @@ A Go SDK for [MLflow](https://mlflow.org). Currently supports the Prompt Registr
 - Load prompts by name (latest or specific version)
 - List prompts and versions with filtering and pagination
 - Register text prompts and chat prompts (with model configuration)
-- Delete prompts, versions, and tags;
+- Delete prompts, versions, and tags
 - Format prompts with variable substitution
 - Modify prompts locally with immutable operations
 
