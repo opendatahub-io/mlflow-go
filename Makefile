@@ -8,7 +8,7 @@ LOCALBIN ?= $(shell pwd)/bin
 UV ?= $(LOCALBIN)/uv
 PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.64.8
+GOLANGCI_LINT_VERSION ?= v2.1.6
 
 # Help target
 help:
@@ -63,16 +63,19 @@ test/integration-ci: $(UV)
 		--backend-store-uri sqlite:///$(MLFLOW_TEST_DATA)/mlflow.db \
 		--default-artifact-root $(MLFLOW_TEST_DATA)/artifacts &
 	@echo "Waiting for MLflow to be ready..."
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		if curl -s http://localhost:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
+	@READY=0; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if curl -s http://127.0.0.1:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
 			echo "MLflow is ready!"; \
+			READY=1; \
+			sleep 2; \
 			break; \
 		fi; \
-		echo "Waiting... ($$i/10)"; \
+		echo "Waiting... ($$i/15)"; \
 		sleep 2; \
-	done
+	done; \
+	if [ $$READY -eq 0 ]; then echo "ERROR: MLflow failed to start" && exit 1; fi
 	@echo "Running integration tests..."
-	@MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_TEST_PORT) \
+	@MLFLOW_TRACKING_URI=http://127.0.0.1:$(MLFLOW_TEST_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
 	go test -v -race -tags=integration ./test/integration/...; \
 	TEST_EXIT=$$?; \
@@ -86,7 +89,7 @@ test/integration-ci: $(UV)
 $(GOLANGCI_LINT):
 	@mkdir -p $(LOCALBIN)
 	@echo "Installing golangci-lint..."
-	GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...

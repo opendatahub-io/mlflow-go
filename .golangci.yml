@@ -1,51 +1,57 @@
-# yaml-language-server: $schema=https://golangci-lint.run/jsonschema/golangci.v1.jsonschema.json
+version: "2"
 run:
-  timeout: 5m
   modules-download-mode: readonly
-
 linters:
   enable:
-    - errcheck       # Check for unchecked errors
-    - gosimple       # Simplify code
-    - govet          # Reports suspicious constructs
-    - ineffassign    # Detect ineffectual assignments
-    - staticcheck    # Advanced static analysis
-    - unused         # Check for unused code
-    - gofmt          # Check formatting
-    - goimports      # Check imports
-    - misspell       # Check spelling
-    - unconvert      # Remove unnecessary conversions
-    - unparam        # Find unused function parameters
-    - gocritic       # Opinionated linter
-    - revive         # Fast, configurable linter
-    - gosec          # Security checks
-    - prealloc       # Find slice preallocation opportunities
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment  # Micro-optimization, not critical
-  revive:
+    - gocritic
+    - gosec
+    - misspell
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    gosec:
+      excludes:
+        - G104
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: exported
-        disabled: true  # We handle doc comments manually
-  gosec:
-    excludes:
-      - G104  # Audit errors not checked (handled by errcheck)
-
-issues:
-  exclude-rules:
-    # Test files can have unchecked errors and complexity
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gocritic
-        - gosec
-    # Generated protobuf files
-    - path: internal/gen/
-      linters:
-        - all
+      - linters:
+          - errcheck
+          - gocritic
+          - gosec
+        path: _test\.go
+      - linters:
+          - all
+        path: internal/gen/
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
