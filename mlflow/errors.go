@@ -34,6 +34,7 @@ func IsAlreadyExists(err error) bool {
 
 // IsAliasConflict reports whether err indicates the operation failed
 // because aliases point to the resource (HTTP 409 Conflict without RESOURCE_ALREADY_EXISTS code).
+// Note: MLflow OSS silently removes aliases on version deletion; this only triggers on Databricks.
 func IsAliasConflict(err error) bool {
 	return internalerrors.IsAliasConflict(err)
 }

@@ -708,7 +708,8 @@ func (c *Client) DeletePromptVersion(ctx context.Context, name string, version i
 }
 
 // DeletePrompt deletes a prompt from the registry.
-// Fails if the prompt has any versions. Delete all versions first.
+// On MLflow OSS, this cascades to delete all versions and aliases automatically.
+// On Databricks, versions must be deleted first.
 func (c *Client) DeletePrompt(ctx context.Context, name string) error {
 	if name == "" {
 		return fmt.Errorf("mlflow: prompt name is required")

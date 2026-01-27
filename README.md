@@ -130,20 +130,17 @@ err := client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "staging")
 ### Delete Prompts and Versions
 
 ```go
+// Delete a prompt (cascades to delete all versions and aliases on MLflow OSS)
+err := client.PromptRegistry().DeletePrompt(ctx, "my-prompt")
+
 // Delete a specific version
-err := client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", 2)
+err = client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", 2)
 if mlflow.IsAliasConflict(err) {
-    // Must remove aliases pointing to this version first
+    // Databricks only: must remove aliases pointing to this version first
+    // (MLflow OSS silently removes aliases on version deletion)
     _ = client.PromptRegistry().DeletePromptAlias(ctx, "my-prompt", "production")
     err = client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", 2)
 }
-
-// Delete all versions, then delete the prompt
-// (Prompt deletion fails if versions exist)
-for i := 1; i <= 3; i++ {
-    _ = client.PromptRegistry().DeletePromptVersion(ctx, "my-prompt", i)
-}
-err = client.PromptRegistry().DeletePrompt(ctx, "my-prompt")
 
 // Delete tags
 err = client.PromptRegistry().DeletePromptTag(ctx, "my-prompt", "environment")
@@ -310,7 +307,7 @@ if err != nil {
     case mlflow.IsPermissionDenied(err):
         fmt.Println("Access denied")
     case mlflow.IsAliasConflict(err):
-        fmt.Println("Cannot delete: aliases point to this version")
+        fmt.Println("Cannot delete: aliases point to this version (Databricks only)")
     default:
         var apiErr *mlflow.APIError
         if errors.As(err, &apiErr) {
