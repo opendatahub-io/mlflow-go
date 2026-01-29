@@ -24,6 +24,7 @@ const (
 	promptTypeText = "text"
 	promptTypeChat = "chat"
 	aliasTagPrefix = "mlflow.prompt.alias."
+	aliasLatest    = "latest"
 )
 
 // Client provides access to the MLflow Prompt Registry.
@@ -50,77 +51,35 @@ func (c *Client) LoadPrompt(ctx context.Context, name string, opts ...LoadOption
 		opt(loadOpts)
 	}
 
-	// If alias is specified, resolve it to a version number
+	// If alias is specified, use the alias endpoint directly
 	if loadOpts.alias != "" {
-		version, err := c.resolveAlias(ctx, name, loadOpts.alias)
-		if err != nil {
-			return nil, err
-		}
-		return c.loadPromptVersionByNumber(ctx, name, version)
+		return c.loadPromptByAlias(ctx, name, loadOpts.alias)
 	}
 
 	if loadOpts.version > 0 {
 		return c.loadPromptVersionByNumber(ctx, name, loadOpts.version)
 	}
 
-	return c.loadLatestPrompt(ctx, name)
+	// No version specified - use the special "latest" alias
+	return c.loadPromptByAlias(ctx, name, aliasLatest)
 }
 
-// loadLatestPrompt loads the latest version of a prompt.
-func (c *Client) loadLatestPrompt(ctx context.Context, name string) (*PromptVersion, error) {
-	var resp mlflowpb.GetRegisteredModel_Response
-
-	query := url.Values{"name": []string{name}}
-	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get prompt: %w", err)
-	}
-
-	// Try to find the latest version from the registered model response
-	latestVersion := 0
-	if resp.RegisteredModel != nil && len(resp.RegisteredModel.LatestVersions) > 0 {
-		v := resp.RegisteredModel.LatestVersions[0].GetVersion()
-		if parsed, parseErr := strconv.Atoi(v); parseErr == nil && parsed > 0 {
-			latestVersion = parsed
-		}
-	}
-
-	// If latest_versions is empty, search for versions directly
-	if latestVersion == 0 {
-		latestVersion, err = c.findLatestVersion(ctx, name)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return c.loadPromptVersionByNumber(ctx, name, latestVersion)
-}
-
-// findLatestVersion searches for the highest version number of a prompt.
-func (c *Client) findLatestVersion(ctx context.Context, name string) (int, error) {
-	var resp mlflowpb.SearchModelVersions_Response
+// loadPromptByAlias loads a prompt version by alias using the MLflow alias endpoint.
+// MLflow supports a special "latest" alias that returns the highest version number.
+func (c *Client) loadPromptByAlias(ctx context.Context, name, alias string) (*PromptVersion, error) {
+	var resp mlflowpb.GetModelVersionByAlias_Response
 
 	query := url.Values{
-		"filter":      []string{fmt.Sprintf("name='%s'", escapeFilterValue(name))},
-		"order_by":    []string{"version_number DESC"},
-		"max_results": []string{"1"},
+		"name":  []string{name},
+		"alias": []string{alias},
 	}
 
-	err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/search", query, &resp)
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/alias", query, &resp)
 	if err != nil {
-		return 0, fmt.Errorf("failed to search versions: %w", err)
+		return nil, fmt.Errorf("failed to get prompt by alias %q: %w", alias, err)
 	}
 
-	if len(resp.ModelVersions) == 0 {
-		return 0, fmt.Errorf("prompt %q has no versions", name)
-	}
-
-	version, err := strconv.Atoi(resp.ModelVersions[0].GetVersion())
-	if err != nil || version <= 0 {
-		return 0, fmt.Errorf("invalid version number for prompt %q", name)
-	}
-
-	return version, nil
+	return modelVersionToPromptVersion(resp.ModelVersion), nil
 }
 
 // loadPromptVersionByNumber loads a specific version of a prompt by version number.
@@ -138,35 +97,6 @@ func (c *Client) loadPromptVersionByNumber(ctx context.Context, name string, ver
 	}
 
 	return modelVersionToPromptVersion(resp.ModelVersion), nil
-}
-
-// resolveAlias resolves an alias to a version number.
-func (c *Client) resolveAlias(ctx context.Context, name, alias string) (int, error) {
-	var resp mlflowpb.GetRegisteredModel_Response
-
-	query := url.Values{"name": []string{name}}
-	err := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &resp)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get prompt: %w", err)
-	}
-
-	if resp.RegisteredModel == nil {
-		return 0, fmt.Errorf("prompt %q not found", name)
-	}
-
-	// Look for the alias tag
-	aliasTag := aliasTagPrefix + alias
-	for _, tag := range resp.RegisteredModel.Tags {
-		if tag.GetKey() == aliasTag {
-			version, err := strconv.Atoi(tag.GetValue())
-			if err != nil {
-				return 0, fmt.Errorf("invalid version for alias %q: %s", alias, tag.GetValue())
-			}
-			return version, nil
-		}
-	}
-
-	return 0, fmt.Errorf("alias %q not found for prompt %q", alias, name)
 }
 
 func modelVersionToPromptVersion(mv *mlflowpb.ModelVersion) *PromptVersion {
@@ -576,27 +506,16 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 		opt(listOpts)
 	}
 
-	// Get the registered model to find the latest version number
-	latestVersion, err := c.findLatestVersion(ctx, name)
+	// Get the latest version number using the "latest" alias
+	latestPrompt, err := c.loadPromptByAlias(ctx, name, aliasLatest)
 	if err != nil {
-		// If findLatestVersion fails, try getting the model directly
-		var getModelResp mlflowpb.GetRegisteredModel_Response
-
-		query := url.Values{"name": []string{name}}
-		if getErr := c.transport.Get(ctx, "/api/2.0/mlflow/registered-models/get", query, &getModelResp); getErr != nil {
-			return nil, fmt.Errorf("failed to get prompt: %w", getErr)
-		}
-
-		if getModelResp.RegisteredModel != nil && len(getModelResp.RegisteredModel.LatestVersions) > 0 {
-			if v, parseErr := strconv.Atoi(getModelResp.RegisteredModel.LatestVersions[0].GetVersion()); parseErr == nil {
-				latestVersion = v
-			}
-		}
-
-		if latestVersion == 0 {
+		// If no versions exist, return empty list
+		if errors.IsNotFound(err) {
 			return &PromptVersionList{Versions: []PromptVersion{}}, nil
 		}
+		return nil, err
 	}
+	latestVersion := latestPrompt.Version
 
 	// Fetch each version individually (workaround for broken search endpoint)
 	result := &PromptVersionList{

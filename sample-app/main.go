@@ -52,11 +52,14 @@ func main() {
 	printPromptVersion(prompt2)
 
 	// === Path 2: LoadPrompt - Load the latest version ===
-	fmt.Println("\n=== 2. LoadPrompt: Loading latest version ===")
+	// When no version is specified, LoadPrompt uses MLflow's "latest" alias internally.
+	// This is efficient: single API call to /registered-models/alias with alias=latest.
+	fmt.Println("\n=== 2. LoadPrompt: Loading latest version (uses @latest alias) ===")
 	latestPrompt, err := client.PromptRegistry().LoadPrompt(ctx, promptName)
 	if err != nil {
 		log.Fatalf("Failed to load latest prompt: %v", err)
 	}
+	fmt.Printf("  Loaded version %d (latest)\n", latestPrompt.Version)
 	printPromptVersion(latestPrompt)
 
 	// === Path 3: LoadPrompt with WithVersion - Load specific version ===
