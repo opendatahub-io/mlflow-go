@@ -57,16 +57,11 @@ func TestLoadPrompt_Success(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
-		case "/api/2.0/mlflow/registered-models/get":
-			json.NewEncoder(w).Encode(map[string]any{
-				"registered_model": map[string]any{
-					"name": "test-prompt",
-					"latest_versions": []map[string]any{
-						{"version": "2"},
-					},
-				},
-			})
-		case "/api/2.0/mlflow/model-versions/get":
+		case "/api/2.0/mlflow/registered-models/alias":
+			// Verify the "latest" alias is being requested
+			if r.URL.Query().Get("alias") != "latest" {
+				t.Errorf("expected alias=latest, got %s", r.URL.Query().Get("alias"))
+			}
 			json.NewEncoder(w).Encode(map[string]any{
 				"model_version": map[string]any{
 					"name":                   "test-prompt",
@@ -173,20 +168,16 @@ func TestLoadPrompt_NotFound(t *testing.T) {
 func TestLoadPrompt_NoVersions(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"registered_model": map[string]any{
-				"name":            "empty-prompt",
-				"latest_versions": []any{},
-			},
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "RESOURCE_DOES_NOT_EXIST",
+			"message":    "Latest version not found for model empty-prompt.",
 		})
 	}))
 
 	_, err := client.LoadPrompt(context.Background(), "empty-prompt")
 	if err == nil {
 		t.Error("expected error for prompt with no versions")
-	}
-	if err.Error() != `prompt "empty-prompt" has no versions` {
-		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
@@ -576,12 +567,14 @@ func TestListPromptVersions_WithMaxResults(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
-		case "/api/2.0/mlflow/registered-models/get":
+		case "/api/2.0/mlflow/registered-models/alias":
+			// Return latest version (5)
 			json.NewEncoder(w).Encode(map[string]any{
-				"registered_model": map[string]any{
-					"name": "test-prompt",
-					"latest_versions": []map[string]any{
-						{"version": "5"},
+				"model_version": map[string]any{
+					"name":    "test-prompt",
+					"version": "5",
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template"},
 					},
 				},
 			})
@@ -623,17 +616,18 @@ func TestListPromptVersions_Success(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
-		case "/api/2.0/mlflow/model-versions/search":
-			// MLflow OSS returns empty for search (simulating the bug)
-			json.NewEncoder(w).Encode(map[string]any{})
-
-		case "/api/2.0/mlflow/registered-models/get":
-			// Return the model with latest version info
+		case "/api/2.0/mlflow/registered-models/alias":
+			// Return latest version (3)
 			json.NewEncoder(w).Encode(map[string]any{
-				"registered_model": map[string]any{
-					"name": "test-prompt",
-					"latest_versions": []map[string]any{
-						{"version": "3"},
+				"model_version": map[string]any{
+					"name":                   "test-prompt",
+					"version":                "3",
+					"description":            "Version 3",
+					"creation_timestamp":     1700000300000,
+					"last_updated_timestamp": 1700000300000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template v3"},
+						{"key": "author", "value": "alice"},
 					},
 				},
 			})
