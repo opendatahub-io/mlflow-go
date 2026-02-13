@@ -195,7 +195,16 @@ versions, err = client.PromptRegistry().ListPromptVersions(ctx, "my-prompt",
 )
 ```
 
-> **Note**: Due to a limitation in MLflow OSS, `ListPromptVersions` fetches versions individually. Only `WithVersionsMaxResults` is supported; pagination and tag filtering options are ignored.
+> **MLflow OSS Known Issue**: MLflow OSS has a bug where the `/model-versions/search` endpoint
+> permanently returns empty results for model versions created in rapid succession (<50ms between
+> calls). The data is written correctly (direct GET by version number works), but the search
+> endpoint never indexes those versions. This affects both SQLite and PostgreSQL backends, pointing
+> to a stale SQLAlchemy session issue in MLflow's multi-worker Uvicorn setup rather than a
+> database-level problem.
+>
+> `ListPromptVersions` works around this by trying the search endpoint first, and falling back to
+> fetching versions individually (via the `@latest` alias + direct GET per version) when search
+> returns empty. We plan to report this issue upstream to MLflow.
 
 ### Register a Text Prompt
 

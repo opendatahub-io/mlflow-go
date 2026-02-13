@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
@@ -491,14 +492,18 @@ func buildPromptsFilter(opts *listPromptsOptions) string {
 // ListPromptVersions returns versions for a specific prompt.
 // Returns metadata only; use LoadPrompt with WithVersion for full template content.
 //
-// Note: Due to a limitation in MLflow OSS model-versions/search endpoint,
-// this method fetches versions individually. Pagination options are ignored.
+// MLflow OSS has a search indexing bug where model-versions/search permanently
+// returns empty results for models whose versions were created in rapid succession
+// (<50ms between calls). Direct GET by version number works fine. See test.md
+// for detailed reproduction steps and analysis.
+//
+// To work around this, ListPromptVersions tries the search endpoint first,
+// and falls back to individual version fetches if search returns empty.
 func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...ListVersionsOption) (*PromptVersionList, error) {
 	if name == "" {
 		return nil, fmt.Errorf("mlflow: prompt name is required")
 	}
 
-	// Apply options (maxResults used to limit results)
 	listOpts := &listVersionsOptions{
 		maxResults: 100,
 	}
@@ -506,10 +511,56 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 		opt(listOpts)
 	}
 
+	// Try efficient search endpoint first
+	result, err := c.listVersionsViaSearch(ctx, name, listOpts.maxResults)
+	if err != nil {
+		return nil, err
+	}
+
+	// If search returned results, we're done
+	if len(result.Versions) > 0 {
+		return result, nil
+	}
+
+	// Search returned empty — fall back to individual fetches.
+	// See ListPromptVersions godoc for why this is needed.
+	return c.listVersionsViaIndividualFetch(ctx, name, listOpts.maxResults)
+}
+
+// listVersionsViaSearch uses the model-versions/search endpoint.
+// Returns empty list if no versions found (caller should try fallback).
+func (c *Client) listVersionsViaSearch(ctx context.Context, name string, maxResults int) (*PromptVersionList, error) {
+	var resp mlflowpb.SearchModelVersions_Response
+
+	query := url.Values{
+		"filter":      []string{fmt.Sprintf("name='%s'", escapeFilterValue(name))},
+		"order_by":    []string{"version_number DESC"},
+		"max_results": []string{strconv.Itoa(maxResults)},
+	}
+
+	err := c.transport.Get(ctx, "/api/2.0/mlflow/model-versions/search", query, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search versions: %w", err)
+	}
+
+	result := &PromptVersionList{
+		Versions: make([]PromptVersion, 0, len(resp.ModelVersions)),
+	}
+
+	for _, mv := range resp.ModelVersions {
+		result.Versions = append(result.Versions, modelVersionToPromptVersionWithoutTemplate(mv))
+	}
+
+	return result, nil
+}
+
+// listVersionsViaIndividualFetch fetches versions one by one.
+// Used as fallback when the search endpoint returns empty due to the MLflow OSS
+// search indexing bug (see ListPromptVersions godoc).
+func (c *Client) listVersionsViaIndividualFetch(ctx context.Context, name string, maxResults int) (*PromptVersionList, error) {
 	// Get the latest version number using the "latest" alias
 	latestPrompt, err := c.loadPromptByAlias(ctx, name, aliasLatest)
 	if err != nil {
-		// If no versions exist, return empty list
 		if errors.IsNotFound(err) {
 			return &PromptVersionList{Versions: []PromptVersion{}}, nil
 		}
@@ -517,13 +568,16 @@ func (c *Client) ListPromptVersions(ctx context.Context, name string, opts ...Li
 	}
 	latestVersion := latestPrompt.Version
 
-	// Fetch each version individually (workaround for broken search endpoint)
+	slog.Warn("MLflow search returned empty, falling back to individual fetches",
+		"prompt", name,
+		"latest_version", latestVersion)
+
 	result := &PromptVersionList{
 		Versions: make([]PromptVersion, 0, latestVersion),
 	}
 
 	for v := latestVersion; v >= 1; v-- {
-		if listOpts.maxResults > 0 && len(result.Versions) >= listOpts.maxResults {
+		if maxResults > 0 && len(result.Versions) >= maxResults {
 			break
 		}
 

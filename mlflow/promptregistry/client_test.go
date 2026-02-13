@@ -563,31 +563,31 @@ func TestListPrompts_WithOrderBy(t *testing.T) {
 }
 
 func TestListPromptVersions_WithMaxResults(t *testing.T) {
+	var receivedMaxResults string
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
-		case "/api/2.0/mlflow/registered-models/alias":
-			// Return latest version (5)
+		case "/api/2.0/mlflow/model-versions/search":
+			receivedMaxResults = r.URL.Query().Get("max_results")
+			// Return 2 versions via search (server respects max_results)
 			json.NewEncoder(w).Encode(map[string]any{
-				"model_version": map[string]any{
-					"name":    "test-prompt",
-					"version": "5",
-					"tags": []map[string]string{
-						{"key": "mlflow.prompt.text", "value": "Template"},
+				"model_versions": []map[string]any{
+					{
+						"name":        "test-prompt",
+						"version":     "5",
+						"description": "Version 5",
+						"tags": []map[string]string{
+							{"key": "mlflow.prompt.text", "value": "Template"},
+						},
 					},
-				},
-			})
-
-		case "/api/2.0/mlflow/model-versions/get":
-			version := r.URL.Query().Get("version")
-			json.NewEncoder(w).Encode(map[string]any{
-				"model_version": map[string]any{
-					"name":        "test-prompt",
-					"version":     version,
-					"description": "Version " + version,
-					"tags": []map[string]string{
-						{"key": "mlflow.prompt.text", "value": "Template"},
+					{
+						"name":        "test-prompt",
+						"version":     "4",
+						"description": "Version 4",
+						"tags": []map[string]string{
+							{"key": "mlflow.prompt.text", "value": "Template"},
+						},
 					},
 				},
 			})
@@ -597,7 +597,7 @@ func TestListPromptVersions_WithMaxResults(t *testing.T) {
 		}
 	}))
 
-	// Request only 2 versions (of 5 available)
+	// Request only 2 versions
 	result, err := client.ListPromptVersions(context.Background(), "test-prompt",
 		WithVersionsMaxResults(2),
 	)
@@ -605,72 +605,58 @@ func TestListPromptVersions_WithMaxResults(t *testing.T) {
 		t.Fatalf("ListPromptVersions() error = %v", err)
 	}
 
+	if receivedMaxResults != "2" {
+		t.Errorf("max_results = %q, want %q", receivedMaxResults, "2")
+	}
+
 	if len(result.Versions) != 2 {
-		t.Errorf("got %d versions, want 2 (maxResults)", len(result.Versions))
+		t.Errorf("got %d versions, want 2", len(result.Versions))
 	}
 }
 
 func TestListPromptVersions_Success(t *testing.T) {
-	// The implementation fetches versions individually due to MLflow OSS limitation
+	var receivedFilter, receivedOrderBy string
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
-		case "/api/2.0/mlflow/registered-models/alias":
-			// Return latest version (3)
+		case "/api/2.0/mlflow/model-versions/search":
+			receivedFilter = r.URL.Query().Get("filter")
+			receivedOrderBy = r.URL.Query().Get("order_by")
+			// Return versions via search endpoint
 			json.NewEncoder(w).Encode(map[string]any{
-				"model_version": map[string]any{
-					"name":                   "test-prompt",
-					"version":                "3",
-					"description":            "Version 3",
-					"creation_timestamp":     1700000300000,
-					"last_updated_timestamp": 1700000300000,
-					"tags": []map[string]string{
-						{"key": "mlflow.prompt.text", "value": "Template v3"},
-						{"key": "author", "value": "alice"},
+				"model_versions": []map[string]any{
+					{
+						"name":                   "test-prompt",
+						"version":                "3",
+						"description":            "Version 3",
+						"creation_timestamp":     1700000300000,
+						"last_updated_timestamp": 1700000300000,
+						"tags": []map[string]string{
+							{"key": "mlflow.prompt.text", "value": "Template v3"},
+							{"key": "author", "value": "alice"},
+						},
+					},
+					{
+						"name":               "test-prompt",
+						"version":            "2",
+						"description":        "Version 2",
+						"creation_timestamp": 1700000200000,
+						"tags": []map[string]string{
+							{"key": "mlflow.prompt.text", "value": "Template v2"},
+						},
+					},
+					{
+						"name":               "test-prompt",
+						"version":            "1",
+						"description":        "Version 1",
+						"creation_timestamp": 1700000100000,
+						"tags": []map[string]string{
+							{"key": "mlflow.prompt.text", "value": "Template v1"},
+						},
 					},
 				},
 			})
-
-		case "/api/2.0/mlflow/model-versions/get":
-			version := r.URL.Query().Get("version")
-			versionData := map[string]map[string]any{
-				"3": {
-					"name":                   "test-prompt",
-					"version":                "3",
-					"description":            "Version 3",
-					"creation_timestamp":     1700000300000,
-					"last_updated_timestamp": 1700000300000,
-					"tags": []map[string]string{
-						{"key": "mlflow.prompt.text", "value": "Template v3"},
-						{"key": "author", "value": "alice"},
-					},
-				},
-				"2": {
-					"name":               "test-prompt",
-					"version":            "2",
-					"description":        "Version 2",
-					"creation_timestamp": 1700000200000,
-					"tags": []map[string]string{
-						{"key": "mlflow.prompt.text", "value": "Template v2"},
-					},
-				},
-				"1": {
-					"name":               "test-prompt",
-					"version":            "1",
-					"description":        "Version 1",
-					"creation_timestamp": 1700000100000,
-					"tags": []map[string]string{
-						{"key": "mlflow.prompt.text", "value": "Template v1"},
-					},
-				},
-			}
-			if data, ok := versionData[version]; ok {
-				json.NewEncoder(w).Encode(map[string]any{"model_version": data})
-			} else {
-				w.WriteHeader(http.StatusNotFound)
-				json.NewEncoder(w).Encode(map[string]string{"error_code": "RESOURCE_DOES_NOT_EXIST"})
-			}
 
 		default:
 			http.NotFound(w, r)
@@ -680,6 +666,16 @@ func TestListPromptVersions_Success(t *testing.T) {
 	result, err := client.ListPromptVersions(context.Background(), "test-prompt")
 	if err != nil {
 		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	// Verify correct filter was sent
+	if receivedFilter != "name='test-prompt'" {
+		t.Errorf("filter = %q, want %q", receivedFilter, "name='test-prompt'")
+	}
+
+	// Verify correct ordering was requested
+	if receivedOrderBy != "version_number DESC" {
+		t.Errorf("order_by = %q, want %q", receivedOrderBy, "version_number DESC")
 	}
 
 	if len(result.Versions) != 3 {
@@ -702,6 +698,71 @@ func TestListPromptVersions_Success(t *testing.T) {
 	// User tags should be present
 	if result.Versions[0].Tags["author"] != "alice" {
 		t.Errorf("Tags[author] = %q, want %q", result.Versions[0].Tags["author"], "alice")
+	}
+}
+
+func TestListPromptVersions_FallbackWhenSearchEmpty(t *testing.T) {
+	// Tests the fallback path when search returns empty (MLflow OSS eventual consistency)
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api/2.0/mlflow/model-versions/search":
+			// Return empty results (simulates MLflow OSS eventual consistency issue)
+			json.NewEncoder(w).Encode(map[string]any{
+				"model_versions": []map[string]any{},
+			})
+
+		case "/api/2.0/mlflow/registered-models/alias":
+			// Fallback: return latest version (3)
+			json.NewEncoder(w).Encode(map[string]any{
+				"model_version": map[string]any{
+					"name":    "test-prompt",
+					"version": "3",
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template v3"},
+					},
+				},
+			})
+
+		case "/api/2.0/mlflow/model-versions/get":
+			// Fallback: individual fetches
+			version := r.URL.Query().Get("version")
+			versionData := map[string]map[string]any{
+				"3": {"name": "test-prompt", "version": "3", "description": "Version 3"},
+				"2": {"name": "test-prompt", "version": "2", "description": "Version 2"},
+				"1": {"name": "test-prompt", "version": "1", "description": "Version 1"},
+			}
+			if data, ok := versionData[version]; ok {
+				json.NewEncoder(w).Encode(map[string]any{"model_version": data})
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				json.NewEncoder(w).Encode(map[string]string{"error_code": "RESOURCE_DOES_NOT_EXIST"})
+			}
+
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	result, err := client.ListPromptVersions(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	// Should get all 3 versions via fallback
+	if len(result.Versions) != 3 {
+		t.Errorf("got %d versions, want 3", len(result.Versions))
+	}
+
+	// Verify versions are returned newest first
+	if len(result.Versions) >= 3 {
+		if result.Versions[0].Version != 3 {
+			t.Errorf("first version = %d, want 3", result.Versions[0].Version)
+		}
+		if result.Versions[2].Version != 1 {
+			t.Errorf("last version = %d, want 1", result.Versions[2].Version)
+		}
 	}
 }
 
