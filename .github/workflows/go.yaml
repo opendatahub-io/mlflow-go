@@ -55,3 +55,53 @@ jobs:
 
       - name: Run integration tests
         run: make test/integration-ci
+
+  test-integration-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mlflow
+          POSTGRES_PASSWORD: mlflow
+          POSTGRES_DB: mlflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mlflow"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Start MLflow with PostgreSQL backend
+        run: |
+          uv run --with mlflow==3.8.1 --with psycopg2-binary mlflow server \
+            --host 127.0.0.1 \
+            --port 5001 \
+            --backend-store-uri postgresql://mlflow:mlflow@localhost:5432/mlflow &
+          echo "Waiting for MLflow to be ready..."
+          for i in $(seq 1 15); do
+            if curl -s http://127.0.0.1:5001/health > /dev/null 2>&1; then
+              echo "MLflow is ready!"
+              sleep 2
+              break
+            fi
+            if [ $i -eq 15 ]; then echo "ERROR: MLflow failed to start" && exit 1; fi
+            echo "Waiting... ($i/15)"
+            sleep 2
+          done
+
+      - name: Run integration tests
+        run: |
+          MLFLOW_TRACKING_URI=http://127.0.0.1:5001 \
+          MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
+          go test -v -race -tags=integration ./test/integration/...

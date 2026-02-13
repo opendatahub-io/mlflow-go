@@ -1,4 +1,4 @@
-.PHONY: test/unit test/integration test/integration-ci gen dev/up dev/down dev/reset dev/seed help lint vet fmt tidy check run-sample
+.PHONY: test/unit test/integration test/integration-ci test/integration-ci-postgres gen dev/up dev/down dev/reset dev/seed dev/postgres-up dev/postgres-down dev/up-postgres help lint vet fmt tidy check run-sample
 
 # Configuration
 MLFLOW_VERSION ?= 3.8.1
@@ -10,6 +10,14 @@ PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 GOLANGCI_LINT_VERSION ?= v2.1.6
 
+# PostgreSQL configuration
+POSTGRES_CONTAINER ?= mlflow-postgres
+POSTGRES_PORT ?= 5432
+POSTGRES_USER ?= mlflow
+POSTGRES_PASSWORD ?= mlflow
+POSTGRES_DB ?= mlflow
+POSTGRES_URI ?= postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
+
 # Help target
 help:
 	@echo "MLflow Go SDK - Development Commands"
@@ -18,6 +26,7 @@ help:
 	@echo "  make test/unit        - Run unit tests with race detector"
 	@echo "  make test/integration - Run integration tests (requires dev/up in another terminal)"
 	@echo "  make test/integration-ci - Run integration tests (isolated DB, auto-cleanup)"
+	@echo "  make test/integration-ci-postgres - Run integration tests against PostgreSQL (auto-cleanup)"
 	@echo "  make check            - Run all checks (lint, vet, test)"
 	@echo ""
 	@echo "Linting:"
@@ -31,6 +40,9 @@ help:
 	@echo "  make dev/down         - Stop local MLflow server"
 	@echo "  make dev/seed         - Seed sample prompts (Bella and Dora!) into running server"
 	@echo "  make dev/reset        - Nuke MLflow data (run dev/up + dev/seed after)"
+	@echo "  make dev/postgres-up  - Start PostgreSQL container for MLflow"
+	@echo "  make dev/postgres-down - Stop and remove PostgreSQL container"
+	@echo "  make dev/up-postgres  - Start MLflow with PostgreSQL backend (requires dev/postgres-up)"
 	@echo ""
 	@echo "Code Generation:"
 	@echo "  make gen              - Generate protobuf types from MLflow protos"
@@ -158,6 +170,102 @@ dev/seed:
 	@echo "Seeding sample prompts (featuring Bella and Dora!)..."
 	@./scripts/seed-prompts.sh
 	@echo "Seeding complete!"
+
+# PostgreSQL development targets
+dev/postgres-up:
+	@echo "Starting PostgreSQL container..."
+	@docker run -d \
+		--name $(POSTGRES_CONTAINER) \
+		-e POSTGRES_USER=$(POSTGRES_USER) \
+		-e POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
+		-e POSTGRES_DB=$(POSTGRES_DB) \
+		-p $(POSTGRES_PORT):5432 \
+		postgres:16
+	@echo "Waiting for PostgreSQL to be ready..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if docker exec $(POSTGRES_CONTAINER) pg_isready -U $(POSTGRES_USER) > /dev/null 2>&1; then \
+			echo "PostgreSQL is ready!"; \
+			break; \
+		fi; \
+		if [ $$i -eq 15 ]; then echo "ERROR: PostgreSQL failed to start" && exit 1; fi; \
+		echo "Waiting... ($$i/15)"; \
+		sleep 2; \
+	done
+
+dev/postgres-down:
+	@echo "Stopping PostgreSQL container..."
+	@docker stop $(POSTGRES_CONTAINER) 2>/dev/null || true
+	@docker rm $(POSTGRES_CONTAINER) 2>/dev/null || true
+	@echo "PostgreSQL container removed."
+
+dev/up-postgres: $(UV)
+	@echo "Starting MLflow server with PostgreSQL backend on port $(MLFLOW_PORT)..."
+	$(UV) run --with mlflow==$(MLFLOW_VERSION) --with psycopg2-binary mlflow server \
+		--host 127.0.0.1 \
+		--port $(MLFLOW_PORT) \
+		--backend-store-uri $(POSTGRES_URI)
+
+# CI/CD integration test target for PostgreSQL - starts postgres, starts MLflow, runs tests, cleans up
+MLFLOW_TEST_POSTGRES_PORT ?= 5433
+
+test/integration-ci-postgres: $(UV)
+	@echo "Starting PostgreSQL container for CI..."
+	@docker run -d \
+		--name $(POSTGRES_CONTAINER)-ci \
+		-e POSTGRES_USER=$(POSTGRES_USER) \
+		-e POSTGRES_PASSWORD=$(POSTGRES_PASSWORD) \
+		-e POSTGRES_DB=$(POSTGRES_DB) \
+		-p $(MLFLOW_TEST_POSTGRES_PORT):5432 \
+		postgres:16
+	@echo "Waiting for PostgreSQL to be ready..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if docker exec $(POSTGRES_CONTAINER)-ci pg_isready -U $(POSTGRES_USER) > /dev/null 2>&1; then \
+			echo "PostgreSQL is ready!"; \
+			break; \
+		fi; \
+		if [ $$i -eq 15 ]; then \
+			echo "ERROR: PostgreSQL failed to start"; \
+			docker stop $(POSTGRES_CONTAINER)-ci 2>/dev/null || true; \
+			docker rm $(POSTGRES_CONTAINER)-ci 2>/dev/null || true; \
+			exit 1; \
+		fi; \
+		echo "Waiting... ($$i/15)"; \
+		sleep 2; \
+	done
+	@echo "Starting MLflow test server on port $(MLFLOW_TEST_PORT) with PostgreSQL backend..."
+	@$(UV) run --with mlflow==$(MLFLOW_VERSION) --with psycopg2-binary mlflow server \
+		--host 127.0.0.1 \
+		--port $(MLFLOW_TEST_PORT) \
+		--backend-store-uri postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(MLFLOW_TEST_POSTGRES_PORT)/$(POSTGRES_DB) &
+	@echo "Waiting for MLflow to be ready..."
+	@READY=0; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if curl -s http://127.0.0.1:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
+			echo "MLflow is ready!"; \
+			READY=1; \
+			sleep 2; \
+			break; \
+		fi; \
+		echo "Waiting... ($$i/15)"; \
+		sleep 2; \
+	done; \
+	if [ $$READY -eq 0 ]; then \
+		echo "ERROR: MLflow failed to start"; \
+		lsof -t -i :$(MLFLOW_TEST_PORT) | xargs kill 2>/dev/null || true; \
+		docker stop $(POSTGRES_CONTAINER)-ci 2>/dev/null || true; \
+		docker rm $(POSTGRES_CONTAINER)-ci 2>/dev/null || true; \
+		exit 1; \
+	fi
+	@echo "Running integration tests..."
+	@MLFLOW_TRACKING_URI=http://127.0.0.1:$(MLFLOW_TEST_PORT) \
+	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
+	go test -v -race -tags=integration ./test/integration/...; \
+	TEST_EXIT=$$?; \
+	echo "Stopping MLflow test server..."; \
+	lsof -t -i :$(MLFLOW_TEST_PORT) | xargs kill 2>/dev/null || true; \
+	echo "Stopping PostgreSQL container..."; \
+	docker stop $(POSTGRES_CONTAINER)-ci 2>/dev/null || true; \
+	docker rm $(POSTGRES_CONTAINER)-ci 2>/dev/null || true; \
+	exit $$TEST_EXIT
 
 # Sample app
 run-sample:
