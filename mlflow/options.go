@@ -2,6 +2,7 @@ package mlflow
 
 import (
 	"log/slog"
+	"maps"
 	"net/http"
 	"time"
 )
@@ -9,7 +10,7 @@ import (
 // options holds the configuration for a Client.
 type options struct {
 	trackingURI string
-	token       string
+	headers     map[string]string
 	httpClient  *http.Client
 	logger      *slog.Logger
 	insecure    bool
@@ -27,11 +28,14 @@ func WithTrackingURI(uri string) Option {
 	}
 }
 
-// WithToken sets the authentication token.
-// Overrides MLFLOW_TRACKING_TOKEN environment variable.
-func WithToken(token string) Option {
+// WithHeaders sets custom HTTP headers sent on every API request.
+// Use this to pass workspace headers, additional auth, or other metadata.
+func WithHeaders(headers map[string]string) Option {
 	return func(o *options) {
-		o.token = token
+		if headers != nil {
+			o.headers = make(map[string]string, len(headers))
+			maps.Copy(o.headers, headers)
+		}
 	}
 }
 

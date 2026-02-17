@@ -17,7 +17,7 @@ import (
 // Client handles HTTP communication with the MLflow API.
 type Client struct {
 	baseURL    *url.URL
-	token      string
+	headers    map[string]string
 	httpClient *http.Client
 	logger     *slog.Logger
 }
@@ -25,7 +25,7 @@ type Client struct {
 // Config holds configuration for creating a transport Client.
 type Config struct {
 	BaseURL    string
-	Token      string
+	Headers    map[string]string
 	HTTPClient *http.Client
 	Logger     *slog.Logger
 	Timeout    time.Duration
@@ -55,7 +55,7 @@ func New(cfg Config) (*Client, error) {
 
 	return &Client{
 		baseURL:    baseURL,
-		token:      cfg.Token,
+		headers:    cfg.Headers,
 		httpClient: httpClient,
 		logger:     cfg.Logger,
 	}, nil
@@ -99,8 +99,8 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
 	}
 
 	// Log request

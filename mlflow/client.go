@@ -25,7 +25,6 @@ type Client struct {
 // NewClient creates a new MLflow client with the given options.
 // If no options are provided, configuration is read from environment variables:
 //   - MLFLOW_TRACKING_URI: MLflow server URL (required)
-//   - MLFLOW_TRACKING_TOKEN: Authentication token (optional)
 //   - MLFLOW_INSECURE_SKIP_TLS_VERIFY: Allow HTTP (optional, default false)
 func NewClient(clientOpts ...Option) (*Client, error) {
 	opts := options{}
@@ -38,9 +37,6 @@ func NewClient(clientOpts ...Option) (*Client, error) {
 	// Fill in missing values from environment variables
 	if opts.trackingURI == "" {
 		opts.trackingURI = os.Getenv("MLFLOW_TRACKING_URI")
-	}
-	if opts.token == "" {
-		opts.token = os.Getenv("MLFLOW_TRACKING_TOKEN")
 	}
 	if !opts.insecure {
 		if v := os.Getenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY"); v == "true" || v == "1" {
@@ -73,7 +69,7 @@ func NewClient(clientOpts ...Option) (*Client, error) {
 	// Create transport client
 	transportCfg := transport.Config{
 		BaseURL:    opts.trackingURI,
-		Token:      opts.token,
+		Headers:    opts.headers,
 		HTTPClient: opts.httpClient,
 		Logger:     opts.logger,
 		Timeout:    opts.timeout,

@@ -1,10 +1,12 @@
-.PHONY: test/unit test/integration test/integration-ci test/integration-ci-postgres gen dev/up dev/up-midstream dev/down dev/reset dev/seed dev/postgres-up dev/postgres-down dev/up-postgres help lint vet fmt tidy check run-sample
+.PHONY: test/unit test/integration test/integration-ci test/integration-ci-midstream test/integration-ci-postgres gen dev/up dev/up-midstream dev/down dev/reset dev/seed dev/seed-workspaces dev/postgres-up dev/postgres-down dev/up-postgres help lint vet fmt tidy check run-sample run-sample-workspaces
 
 # Configuration
 # Also update MLFLOW_VERSION in .github/workflows/go.yaml when changing this
 MLFLOW_VERSION ?= 3.9.0
 # To run against Red Hat midstream (opendatahub-io/mlflow), use: make dev/up-midstream
-MLFLOW_MIDSTREAM_SOURCE ?= mlflow @ git+https://github.com/opendatahub-io/mlflow@master
+# Change MLFLOW_MIDSTREAM_REF to a tag (e.g., v3.9.0-rh1) when available
+MLFLOW_MIDSTREAM_REF ?= master
+MLFLOW_MIDSTREAM_SOURCE ?= mlflow @ git+https://github.com/opendatahub-io/mlflow@$(MLFLOW_MIDSTREAM_REF)
 MLFLOW_WITH ?= $(if $(MLFLOW_SOURCE),$(MLFLOW_SOURCE),mlflow==$(MLFLOW_VERSION))
 MLFLOW_PORT ?= 5000
 MLFLOW_DATA ?= $(shell pwd)/.mlflow
@@ -30,6 +32,7 @@ help:
 	@echo "  make test/unit        - Run unit tests with race detector"
 	@echo "  make test/integration - Run integration tests (requires dev/up in another terminal)"
 	@echo "  make test/integration-ci - Run integration tests (isolated DB, auto-cleanup)"
+	@echo "  make test/integration-ci-midstream - Run integration tests against midstream with workspaces"
 	@echo "  make test/integration-ci-postgres - Run integration tests against PostgreSQL (auto-cleanup)"
 	@echo "  make check            - Run all checks (lint, vet, test)"
 	@echo ""
@@ -44,6 +47,7 @@ help:
 	@echo "  make dev/up-midstream - Start MLflow from opendatahub-io/mlflow fork"
 	@echo "  make dev/down         - Stop local MLflow server"
 	@echo "  make dev/seed         - Seed sample prompts (Bella and Dora!) into running server"
+	@echo "  make dev/seed-workspaces - Create team-bella and team-dora workspaces (requires dev/up-midstream)"
 	@echo "  make dev/reset        - Nuke MLflow data (run dev/up + dev/seed after)"
 	@echo "  make dev/postgres-up  - Start PostgreSQL container for MLflow"
 	@echo "  make dev/postgres-down - Stop and remove PostgreSQL container"
@@ -54,6 +58,7 @@ help:
 	@echo ""
 	@echo "Sample:"
 	@echo "  make run-sample       - Run sample app (requires dev/up)"
+	@echo "  make run-sample-workspaces - Run workspace isolation demo (requires dev/up-midstream + dev/seed-workspaces)"
 
 # Testing targets
 test/unit:
@@ -81,7 +86,7 @@ test/integration-ci: $(UV)
 		--default-artifact-root $(MLFLOW_TEST_DATA)/artifacts &
 	@echo "Waiting for MLflow to be ready..."
 	@READY=0; for i in $$(seq 1 30); do \
-		if curl -s http://127.0.0.1:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
+		if curl -s http://localhost:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
 			echo "MLflow is ready!"; \
 			READY=1; \
 			sleep 2; \
@@ -92,8 +97,50 @@ test/integration-ci: $(UV)
 	done; \
 	if [ $$READY -eq 0 ]; then echo "ERROR: MLflow failed to start" && exit 1; fi
 	@echo "Running integration tests..."
-	@MLFLOW_TRACKING_URI=http://127.0.0.1:$(MLFLOW_TEST_PORT) \
+	@MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_TEST_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
+	go test -v -race -tags=integration ./test/integration/...; \
+	TEST_EXIT=$$?; \
+	echo "Stopping MLflow test server..."; \
+	lsof -t -i :$(MLFLOW_TEST_PORT) | xargs kill 2>/dev/null || true; \
+	echo "Cleaning up test database..."; \
+	rm -rf $(MLFLOW_TEST_DATA); \
+	exit $$TEST_EXIT
+
+# CI/CD integration test target for midstream - starts MLflow with workspaces, runs tests, cleans up
+test/integration-ci-midstream: $(UV)
+	@echo "Using isolated test database: $(MLFLOW_TEST_DATA)"
+	@echo "Midstream ref: $(MLFLOW_MIDSTREAM_REF)"
+	@rm -rf $(MLFLOW_TEST_DATA)
+	@mkdir -p $(MLFLOW_TEST_DATA)
+	@echo "Starting midstream MLflow test server on port $(MLFLOW_TEST_PORT)..."
+	@MLFLOW_ENABLE_WORKSPACES=true $(UV) run --with "$(MLFLOW_MIDSTREAM_SOURCE)" mlflow server \
+		--host 127.0.0.1 \
+		--port $(MLFLOW_TEST_PORT) \
+		--backend-store-uri sqlite:///$(MLFLOW_TEST_DATA)/mlflow.db \
+		--default-artifact-root $(MLFLOW_TEST_DATA)/artifacts &
+	@echo "Waiting for MLflow to be ready..."
+	@READY=0; for i in $$(seq 1 30); do \
+		if curl -s http://localhost:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
+			echo "MLflow is ready!"; \
+			READY=1; \
+			sleep 2; \
+			break; \
+		fi; \
+		echo "Waiting... ($$i/30)"; \
+		sleep 2; \
+	done; \
+	if [ $$READY -eq 0 ]; then echo "ERROR: MLflow failed to start" && exit 1; fi
+	@echo "Creating test workspaces..."
+	@curl -s -X POST http://localhost:$(MLFLOW_TEST_PORT)/api/3.0/mlflow/workspaces \
+		-H "Content-Type: application/json" -d '{"name": "team-bella"}' > /dev/null
+	@curl -s -X POST http://localhost:$(MLFLOW_TEST_PORT)/api/3.0/mlflow/workspaces \
+		-H "Content-Type: application/json" -d '{"name": "team-dora"}' > /dev/null
+	@echo "Workspaces created!"
+	@echo "Running integration tests (including workspace isolation)..."
+	@MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_TEST_PORT) \
+	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
+	MLFLOW_TEST_WORKSPACES=true \
 	go test -v -race -tags=integration ./test/integration/...; \
 	TEST_EXIT=$$?; \
 	echo "Stopping MLflow test server..."; \
@@ -162,7 +209,17 @@ dev/up: $(UV)
 		--default-artifact-root $(MLFLOW_DATA)/artifacts
 
 dev/up-midstream:
-	@$(MAKE) dev/up MLFLOW_SOURCE="$(MLFLOW_MIDSTREAM_SOURCE)"
+	@MLFLOW_ENABLE_WORKSPACES=true $(MAKE) dev/up MLFLOW_SOURCE="$(MLFLOW_MIDSTREAM_SOURCE)"
+
+dev/seed-workspaces:
+	@echo "Creating test workspaces..."
+	@curl -s -X POST http://localhost:$(MLFLOW_PORT)/api/3.0/mlflow/workspaces \
+		-H "Content-Type: application/json" \
+		-d '{"name": "team-bella"}' && echo " -> team-bella created"
+	@curl -s -X POST http://localhost:$(MLFLOW_PORT)/api/3.0/mlflow/workspaces \
+		-H "Content-Type: application/json" \
+		-d '{"name": "team-dora"}' && echo " -> team-dora created"
+	@echo "Workspaces seeded!"
 
 dev/down:
 	@echo "Stopping MLflow server..."
@@ -247,7 +304,7 @@ test/integration-ci-postgres: $(UV)
 		--backend-store-uri postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(MLFLOW_TEST_POSTGRES_PORT)/$(POSTGRES_DB) &
 	@echo "Waiting for MLflow to be ready..."
 	@READY=0; for i in $$(seq 1 30); do \
-		if curl -s http://127.0.0.1:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
+		if curl -s http://localhost:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
 			echo "MLflow is ready!"; \
 			READY=1; \
 			sleep 2; \
@@ -264,7 +321,7 @@ test/integration-ci-postgres: $(UV)
 		exit 1; \
 	fi
 	@echo "Running integration tests..."
-	@MLFLOW_TRACKING_URI=http://127.0.0.1:$(MLFLOW_TEST_PORT) \
+	@MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_TEST_PORT) \
 	MLFLOW_INSECURE_SKIP_TLS_VERIFY=true \
 	go test -v -race -tags=integration ./test/integration/...; \
 	TEST_EXIT=$$?; \
@@ -278,4 +335,8 @@ test/integration-ci-postgres: $(UV)
 # Sample app
 run-sample:
 	@echo "Running sample app..."
-	cd sample-app && go run .
+	cd sample-app && MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) MLFLOW_INSECURE_SKIP_TLS_VERIFY=true go run .
+
+run-sample-workspaces:
+	@echo "Running workspace isolation demo..."
+	cd sample-app && MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) MLFLOW_INSECURE_SKIP_TLS_VERIFY=true MLFLOW_DEMO_WORKSPACES=true go run .

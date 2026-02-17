@@ -157,35 +157,6 @@ func TestNewClient_InsecureEnvVar_One(t *testing.T) {
 	}
 }
 
-func TestNewClient_TokenFromEnv(t *testing.T) {
-	savedURI := os.Getenv("MLFLOW_TRACKING_URI")
-	savedToken := os.Getenv("MLFLOW_TRACKING_TOKEN")
-	os.Setenv("MLFLOW_TRACKING_URI", "https://mlflow.example.com")
-	os.Setenv("MLFLOW_TRACKING_TOKEN", "secret-token")
-	defer func() {
-		if savedURI != "" {
-			os.Setenv("MLFLOW_TRACKING_URI", savedURI)
-		} else {
-			os.Unsetenv("MLFLOW_TRACKING_URI")
-		}
-		if savedToken != "" {
-			os.Setenv("MLFLOW_TRACKING_TOKEN", savedToken)
-		} else {
-			os.Unsetenv("MLFLOW_TRACKING_TOKEN")
-		}
-	}()
-
-	client, err := NewClient()
-	if err != nil {
-		t.Fatalf("NewClient() error = %v", err)
-	}
-
-	// We can't directly check the token, but verify client was created
-	if client == nil {
-		t.Error("client should not be nil")
-	}
-}
-
 func TestNewClient_InvalidURI(t *testing.T) {
 	_, err := NewClient(
 		WithTrackingURI("://invalid"),

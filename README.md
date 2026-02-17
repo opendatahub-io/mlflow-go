@@ -13,6 +13,12 @@ A Go SDK for [MLflow](https://mlflow.org). Currently supports the Prompt Registr
 - Format prompts with variable substitution
 - Modify prompts locally with immutable operations
 
+### Workspace Isolation (Midstream)
+
+- Forward custom headers on every request via `WithHeaders`
+- Tenant isolation with `X-MLFLOW-WORKSPACE` header
+- Compatible with the [Red Hat midstream fork](https://github.com/opendatahub-io/mlflow) (opendatahub-io/mlflow)
+
 ### General
 
 - Full context support for cancellation and timeouts
@@ -68,7 +74,6 @@ func main() {
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `MLFLOW_TRACKING_URI` | MLflow server URL | Yes |
-| `MLFLOW_TRACKING_TOKEN` | Authentication token | No |
 | `MLFLOW_INSECURE_SKIP_TLS_VERIFY` | Allow HTTP (set to `true` or `1`) | No |
 
 ### Explicit Configuration
@@ -76,9 +81,56 @@ func main() {
 ```go
 client, err := mlflow.NewClient(
     mlflow.WithTrackingURI("https://mlflow.example.com"),
-    mlflow.WithToken("my-token"),
+    mlflow.WithHeaders(map[string]string{
+        "Authorization": "Bearer my-token",
+    }),
     mlflow.WithTimeout(60 * time.Second),
 )
+```
+
+### Custom Headers and Workspace Isolation
+
+`WithHeaders` forwards custom HTTP headers on every API request. This is primarily used for workspace-based tenant isolation with the [Red Hat midstream fork](https://github.com/opendatahub-io/mlflow) (opendatahub-io/mlflow), but can also carry additional auth headers or routing metadata.
+
+The midstream fork adds multi-tenant workspace support to MLflow. Each workspace acts as an isolated namespace — prompts, models, and versions created in one workspace are completely invisible from another. The server routes requests to the correct workspace based on the `X-MLFLOW-WORKSPACE` header.
+
+> **Note:** Workspace isolation is currently available in the Red Hat midstream fork. This feature is planned to be upstreamed to MLflow in the near future.
+
+```go
+// Create a client scoped to a workspace
+clientA, err := mlflow.NewClient(
+    mlflow.WithTrackingURI("http://127.0.0.1:5000"),
+    mlflow.WithInsecure(),
+    mlflow.WithHeaders(map[string]string{
+        "X-MLFLOW-WORKSPACE": "team-bella",
+    }),
+)
+
+// Register a prompt in team-bella
+clientA.PromptRegistry().RegisterPrompt(ctx, "my-prompt", "Hello {{name}}!")
+
+// Create a second client scoped to team-dora
+clientB, err := mlflow.NewClient(
+    mlflow.WithTrackingURI("http://127.0.0.1:5000"),
+    mlflow.WithInsecure(),
+    mlflow.WithHeaders(map[string]string{
+        "X-MLFLOW-WORKSPACE": "team-dora",
+    }),
+)
+
+// This returns NotFound — the prompt exists only in team-bella
+_, err = clientB.PromptRegistry().LoadPrompt(ctx, "my-prompt")
+// mlflow.IsNotFound(err) == true
+```
+
+Workspaces must be pre-created on the server before use. If you reference a workspace that doesn't exist, the server returns a `RESOURCE_DOES_NOT_EXIST` error. For local development:
+
+```bash
+# Start midstream server with workspaces enabled
+make dev/up-midstream
+
+# Create workspaces
+make dev/seed-workspaces
 ```
 
 ### Local Development
@@ -343,6 +395,8 @@ This Go SDK covers the core Prompt Registry functionality. Some advanced feature
 | Tags on registration | ✅ Supported |
 | Delete prompts and versions | ✅ Supported |
 | Delete tags | ✅ Supported |
+| Custom headers (`WithHeaders`) | ✅ Supported |
+| Workspace isolation (midstream) | ✅ Supported |
 | Set/update tags after creation | ❌ Not yet |
 | Update model config after creation | ❌ Not yet |
 | Jinja2 templates (conditionals, loops) | ❌ Not yet |
@@ -371,8 +425,11 @@ make check
 # Start local MLflow server (requires uv)
 make dev/up
 
-# Start MLflow from opendatahub-io/mlflow fork
+# Start MLflow from opendatahub-io/mlflow fork (with workspaces enabled)
 make dev/up-midstream
+
+# Create test workspaces (team-bella and team-dora)
+make dev/seed-workspaces
 
 # Seed sample prompts (featuring Bella and Dora!)
 make dev/seed
@@ -380,11 +437,16 @@ make dev/seed
 # Run the sample app
 make run-sample
 
+# Run workspace isolation demo (requires midstream server)
+make dev/up-midstream   # in one terminal
+make dev/seed-workspaces
+make run-sample-workspaces
+
 # Run integration tests
 make test/integration
 
 # Run integration tests against midstream
-make test/integration-ci MLFLOW_SOURCE="mlflow @ git+https://github.com/opendatahub-io/mlflow@master"
+make test/integration-ci-midstream
 
 # Stop local MLflow server
 make dev/down

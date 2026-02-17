@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -525,4 +526,146 @@ func TestDeletePromptVersionWithAlias(t *testing.T) {
 	_ = client.PromptRegistry().DeletePrompt(ctx, promptName)
 
 	t.Log("DeletePromptVersionWithAlias test passed")
+}
+
+// TestWorkspaceIsolation tests that prompts registered in one workspace
+// are not visible from another workspace. Requires a midstream MLflow server
+// with MLFLOW_ENABLE_WORKSPACES=true and pre-created workspaces (team-bella, team-dora).
+//
+// Setup:
+//
+//	make dev/up-midstream
+//	make dev/seed-workspaces
+//
+// Run with: MLFLOW_TEST_WORKSPACES=true make test/integration
+func TestWorkspaceIsolation(t *testing.T) {
+	if os.Getenv("MLFLOW_TEST_WORKSPACES") != "true" {
+		t.Skip("Skipping workspace test: set MLFLOW_TEST_WORKSPACES=true (requires midstream server with workspaces)")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create clients for two different workspaces
+	clientA, err := mlflow.NewClient(
+		mlflow.WithInsecure(),
+		mlflow.WithHeaders(map[string]string{"X-MLFLOW-WORKSPACE": "team-bella"}),
+	)
+	if err != nil {
+		t.Fatalf("NewClient(team-bella) error = %v", err)
+	}
+
+	clientB, err := mlflow.NewClient(
+		mlflow.WithInsecure(),
+		mlflow.WithHeaders(map[string]string{"X-MLFLOW-WORKSPACE": "team-dora"}),
+	)
+	if err != nil {
+		t.Fatalf("NewClient(team-dora) error = %v", err)
+	}
+
+	promptNameA := fmt.Sprintf("ws-team-bella-%d", time.Now().UnixNano())
+	promptNameB := fmt.Sprintf("ws-team-dora-%d", time.Now().UnixNano())
+
+	// Register prompt in team-bella
+	t.Log("Registering prompt in team-bella workspace")
+	v1, err := clientA.PromptRegistry().RegisterPrompt(ctx, promptNameA,
+		"Hello from team-bella!",
+		promptregistry.WithCommitMessage("workspace isolation test"),
+	)
+	if err != nil {
+		t.Fatalf("RegisterPrompt(team-bella) error = %v", err)
+	}
+	if v1.Version != 1 {
+		t.Errorf("Expected version 1, got %d", v1.Version)
+	}
+
+	// Wait for search indexing (MLflow OSS has a known indexing delay)
+	time.Sleep(500 * time.Millisecond)
+
+	// Register prompt in team-dora
+	t.Log("Registering prompt in team-dora workspace")
+	v1b, err := clientB.PromptRegistry().RegisterPrompt(ctx, promptNameB,
+		"Hello from team-dora!",
+		promptregistry.WithCommitMessage("workspace isolation test"),
+	)
+	if err != nil {
+		t.Fatalf("RegisterPrompt(team-dora) error = %v", err)
+	}
+	if v1b.Version != 1 {
+		t.Errorf("Expected version 1, got %d", v1b.Version)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify team-bella prompt is visible from team-bella
+	t.Log("Verifying team-bella prompt is visible from team-bella")
+	loaded, err := clientA.PromptRegistry().LoadPrompt(ctx, promptNameA)
+	if err != nil {
+		t.Fatalf("LoadPrompt(team-bella, promptA) error = %v", err)
+	}
+	if loaded.Template != "Hello from team-bella!" {
+		t.Errorf("Template = %q, want %q", loaded.Template, "Hello from team-bella!")
+	}
+
+	// Verify team-bella prompt is NOT visible from team-dora
+	t.Log("Verifying team-bella prompt is NOT visible from team-dora")
+	_, err = clientB.PromptRegistry().LoadPrompt(ctx, promptNameA)
+	if err == nil {
+		t.Fatal("Expected error: team-bella prompt should not be visible from team-dora")
+	}
+	if !mlflow.IsNotFound(err) {
+		t.Errorf("Expected IsNotFound from team-dora, got: %v", err)
+	}
+
+	// Verify team-dora prompt is NOT visible from team-bella
+	t.Log("Verifying team-dora prompt is NOT visible from team-bella")
+	_, err = clientA.PromptRegistry().LoadPrompt(ctx, promptNameB)
+	if err == nil {
+		t.Fatal("Expected error: team-dora prompt should not be visible from team-bella")
+	}
+	if !mlflow.IsNotFound(err) {
+		t.Errorf("Expected IsNotFound from team-bella, got: %v", err)
+	}
+
+	// Verify team-dora prompt is visible from team-dora
+	t.Log("Verifying team-dora prompt is visible from team-dora")
+	loadedB, err := clientB.PromptRegistry().LoadPrompt(ctx, promptNameB)
+	if err != nil {
+		t.Fatalf("LoadPrompt(team-dora, promptB) error = %v", err)
+	}
+	if loadedB.Template != "Hello from team-dora!" {
+		t.Errorf("Template = %q, want %q", loadedB.Template, "Hello from team-dora!")
+	}
+
+	// Verify list isolation: team-bella list should contain promptA but not promptB
+	t.Log("Verifying list isolation")
+	listA, err := clientA.PromptRegistry().ListPrompts(ctx,
+		promptregistry.WithNameFilter("ws-team-%"),
+	)
+	if err != nil {
+		t.Fatalf("ListPrompts(team-bella) error = %v", err)
+	}
+	foundA, foundB := false, false
+	for _, p := range listA.Prompts {
+		if p.Name == promptNameA {
+			foundA = true
+		}
+		if p.Name == promptNameB {
+			foundB = true
+		}
+	}
+	if !foundA {
+		t.Error("team-bella list should contain its own prompt")
+	}
+	if foundB {
+		t.Error("team-bella list should NOT contain team-dora's prompt")
+	}
+
+	// Cleanup
+	_ = clientA.PromptRegistry().DeletePromptVersion(ctx, promptNameA, 1)
+	_ = clientA.PromptRegistry().DeletePrompt(ctx, promptNameA)
+	_ = clientB.PromptRegistry().DeletePromptVersion(ctx, promptNameB, 1)
+	_ = clientB.PromptRegistry().DeletePrompt(ctx, promptNameB)
+
+	t.Log("Workspace isolation test passed")
 }

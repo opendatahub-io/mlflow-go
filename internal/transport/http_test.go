@@ -32,7 +32,7 @@ func TestClient_Get_Success(t *testing.T) {
 
 	client, err := New(Config{
 		BaseURL: server.URL,
-		Token:   "test-token",
+		Headers: map[string]string{"Authorization": "Bearer test-token"},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -308,7 +308,7 @@ func TestClient_LogsRequestAndResponse(t *testing.T) {
 
 	client, err := New(Config{
 		BaseURL: server.URL,
-		Token:   "secret-token",
+		Headers: map[string]string{"Authorization": "Bearer secret-token"},
 		Logger:  logger,
 	})
 	if err != nil {
@@ -382,7 +382,7 @@ func TestClient_LogsNeverIncludeSecrets(t *testing.T) {
 
 	client, err := New(Config{
 		BaseURL: server.URL,
-		Token:   "super-secret-token",
+		Headers: map[string]string{"Authorization": "Bearer super-secret-token"},
 		Logger:  logger,
 	})
 	if err != nil {
@@ -417,5 +417,79 @@ func TestClient_LogsNeverIncludeSecrets(t *testing.T) {
 				t.Errorf("response body content should not be logged")
 			}
 		}
+	}
+}
+
+func TestCustomHeadersSentOnRequest(t *testing.T) {
+	var receivedHeaders http.Header
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	client, err := New(Config{
+		BaseURL: server.URL,
+		Headers: map[string]string{
+			"X-MLFLOW-WORKSPACE": "team-bella",
+			"X-Custom":           "value-123",
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	err = client.Get(context.Background(), "/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	if got := receivedHeaders.Get("X-MLFLOW-WORKSPACE"); got != "team-bella" {
+		t.Errorf("X-MLFLOW-WORKSPACE = %q, want %q", got, "team-bella")
+	}
+	if got := receivedHeaders.Get("X-Custom"); got != "value-123" {
+		t.Errorf("X-Custom = %q, want %q", got, "value-123")
+	}
+	// Standard headers should still be present
+	if got := receivedHeaders.Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", got, "application/json")
+	}
+}
+
+func TestCustomHeadersWithToken(t *testing.T) {
+	var receivedHeaders http.Header
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	client, err := New(Config{
+		BaseURL: server.URL,
+		Headers: map[string]string{
+			"Authorization":      "Bearer my-token",
+			"X-MLFLOW-WORKSPACE": "team-dora",
+		},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	err = client.Get(context.Background(), "/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	if got := receivedHeaders.Get("Authorization"); got != "Bearer my-token" {
+		t.Errorf("Authorization = %q, want %q", got, "Bearer my-token")
+	}
+	if got := receivedHeaders.Get("X-MLFLOW-WORKSPACE"); got != "team-dora" {
+		t.Errorf("X-MLFLOW-WORKSPACE = %q, want %q", got, "team-dora")
 	}
 }
