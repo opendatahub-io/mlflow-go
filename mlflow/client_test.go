@@ -157,6 +157,32 @@ func TestNewClient_InsecureEnvVar_One(t *testing.T) {
 	}
 }
 
+func TestNewClient_BareHostPort(t *testing.T) {
+	client, err := NewClient(
+		WithTrackingURI("mlflow.example.com:5000"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	if client.TrackingURI() != "https://mlflow.example.com:5000" {
+		t.Errorf("TrackingURI() = %q, want %q", client.TrackingURI(), "https://mlflow.example.com:5000")
+	}
+}
+
+func TestNewClient_BareHostOnly(t *testing.T) {
+	client, err := NewClient(
+		WithTrackingURI("mlflow.example.com"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	if client.TrackingURI() != "https://mlflow.example.com" {
+		t.Errorf("TrackingURI() = %q, want %q", client.TrackingURI(), "https://mlflow.example.com")
+	}
+}
+
 func TestNewClient_InvalidURI(t *testing.T) {
 	_, err := NewClient(
 		WithTrackingURI("://invalid"),

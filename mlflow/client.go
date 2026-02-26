@@ -1,15 +1,17 @@
 // Package mlflow provides a Go SDK for MLflow.
-// Currently supports Prompt Registry; more capabilities planned.
+// Supports Prompt Registry and Experiment Tracking.
 package mlflow
 
 import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/opendatahub-io/mlflow-go/internal/transport"
 	"github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
+	"github.com/opendatahub-io/mlflow-go/mlflow/tracking"
 )
 
 // Client is the MLflow SDK client.
@@ -20,6 +22,9 @@ type Client struct {
 
 	promptRegistryOnce sync.Once
 	promptRegistry     *promptregistry.Client
+
+	trackingOnce sync.Once
+	tracking     *tracking.Client
 }
 
 // NewClient creates a new MLflow client with the given options.
@@ -49,6 +54,12 @@ func NewClient(clientOpts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("mlflow: tracking URI is required (set MLFLOW_TRACKING_URI or use WithTrackingURI)")
 	}
 
+	// Normalize bare host:port input (e.g., "localhost:5000") by prepending https://.
+	// Without a scheme, url.Parse treats the host as the scheme and the port as opaque data.
+	if !strings.Contains(opts.trackingURI, "://") {
+		opts.trackingURI = "https://" + opts.trackingURI
+	}
+
 	// Parse and validate the URI
 	parsedURL, err := url.Parse(opts.trackingURI)
 	if err != nil {
@@ -58,12 +69,6 @@ func NewClient(clientOpts ...Option) (*Client, error) {
 	// Enforce HTTPS unless insecure mode is enabled
 	if !opts.insecure && parsedURL.Scheme == "http" {
 		return nil, fmt.Errorf("mlflow: HTTP is not allowed (use HTTPS or enable insecure mode with WithInsecure)")
-	}
-
-	// Normalize scheme if missing
-	if parsedURL.Scheme == "" {
-		parsedURL.Scheme = "https"
-		opts.trackingURI = parsedURL.String()
 	}
 
 	// Create transport client
@@ -103,4 +108,13 @@ func (c *Client) PromptRegistry() *promptregistry.Client {
 		c.promptRegistry = promptregistry.NewClient(c.transport)
 	})
 	return c.promptRegistry
+}
+
+// Tracking returns the Tracking client for experiment and run management.
+// The sub-client is created lazily on first access.
+func (c *Client) Tracking() *tracking.Client {
+	c.trackingOnce.Do(func() {
+		c.tracking = tracking.NewClient(c.transport)
+	})
+	return c.tracking
 }

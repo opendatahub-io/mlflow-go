@@ -15,6 +15,7 @@ UV ?= $(LOCALBIN)/uv
 PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 GOLANGCI_LINT_VERSION ?= v2.1.6
+PROTOC_GEN_GO_VERSION ?= v1.36.11
 
 # PostgreSQL configuration
 POSTGRES_CONTAINER ?= mlflow-postgres
@@ -46,7 +47,7 @@ help:
 	@echo "  make dev/up           - Start local MLflow server (foreground, Ctrl+C to stop)"
 	@echo "  make dev/up-midstream - Start MLflow from opendatahub-io/mlflow fork"
 	@echo "  make dev/down         - Stop local MLflow server"
-	@echo "  make dev/seed         - Seed sample prompts (Bella and Dora!) into running server"
+	@echo "  make dev/seed         - Seed sample data (prompts, experiments, runs) into running server"
 	@echo "  make dev/seed-workspaces - Create team-bella and team-dora workspaces (requires dev/up-midstream)"
 	@echo "  make dev/reset        - Nuke MLflow data (run dev/up + dev/seed after)"
 	@echo "  make dev/postgres-up  - Start PostgreSQL container for MLflow"
@@ -174,7 +175,7 @@ check: lint vet test/unit
 $(PROTOC_GEN_GO):
 	@mkdir -p $(LOCALBIN)
 	@echo "Installing protoc-gen-go..."
-	GOBIN=$(LOCALBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	GOBIN=$(LOCALBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
 
 # Code generation
 gen: tools/proto/fetch-protos.sh $(PROTOC_GEN_GO)
@@ -182,14 +183,26 @@ gen: tools/proto/fetch-protos.sh $(PROTOC_GEN_GO)
 	@./tools/proto/fetch-protos.sh
 	@echo "Generating Go types..."
 	@which protoc > /dev/null || (echo "Error: protoc not installed. Install via: brew install protobuf" && exit 1)
+	@echo "  Generating stub dependencies..."
+	@mkdir -p internal/gen/assessmentspb internal/gen/datasetspb internal/gen/otelpb
+	PATH=$(LOCALBIN):$$PATH protoc \
+		--proto_path=tools/proto/stubs \
+		--go_out=. \
+		--go_opt=module=github.com/opendatahub-io/mlflow-go \
+		assessments.proto datasets.proto opentelemetry/proto/trace/v1/trace.proto
+	@echo "  Generating MLflow types..."
 	PATH=$(LOCALBIN):$$PATH protoc \
 		--proto_path=internal/gen/mlflowpb \
 		--proto_path=tools/proto/stubs \
 		--go_out=internal/gen/mlflowpb \
 		--go_opt=paths=source_relative \
 		--go_opt=Mmodel_registry.proto=github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb \
+		--go_opt=Mservice.proto=github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb \
 		--go_opt=Mdatabricks.proto=github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb \
-		model_registry.proto databricks.proto
+		--go_opt=Massessments.proto=github.com/opendatahub-io/mlflow-go/internal/gen/assessmentspb \
+		--go_opt=Mdatasets.proto=github.com/opendatahub-io/mlflow-go/internal/gen/datasetspb \
+		--go_opt=Mopentelemetry/proto/trace/v1/trace.proto=github.com/opendatahub-io/mlflow-go/internal/gen/otelpb \
+		model_registry.proto service.proto databricks.proto
 
 # UV installation (lazy install)
 $(UV):
@@ -232,9 +245,8 @@ dev/reset: dev/down
 	@echo "Done! Now run: make dev/up (in one terminal) then make dev/seed (in another)"
 
 dev/seed:
-	@echo "Seeding sample prompts (featuring Bella and Dora!)..."
-	@./scripts/seed-prompts.sh
-	@echo "Seeding complete!"
+	@echo "Seeding sample data (featuring Bella and Dora!)..."
+	@./scripts/seed.sh
 
 # PostgreSQL development targets
 dev/postgres-up:

@@ -669,3 +669,86 @@ func TestWorkspaceIsolation(t *testing.T) {
 
 	t.Log("Workspace isolation test passed")
 }
+
+// TestPromptAliasRoundTrip tests that SetPromptAlias + LoadPrompt(WithAlias) works end-to-end.
+func TestPromptAliasRoundTrip(t *testing.T) {
+	client, err := mlflow.NewClient(mlflow.WithInsecure())
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	promptName := fmt.Sprintf("e2e-alias-roundtrip-%d", time.Now().UnixNano())
+
+	// Create prompt with 2 versions
+	v1, err := client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 1 template")
+	if err != nil {
+		t.Fatalf("RegisterPrompt() v1 error = %v", err)
+	}
+	if v1.Version != 1 {
+		t.Fatalf("Expected version 1, got %d", v1.Version)
+	}
+
+	v2, err := client.PromptRegistry().RegisterPrompt(ctx, promptName, "Version 2 template")
+	if err != nil {
+		t.Fatalf("RegisterPrompt() v2 error = %v", err)
+	}
+	if v2.Version != 2 {
+		t.Fatalf("Expected version 2, got %d", v2.Version)
+	}
+
+	// Set "production" alias to version 1
+	err = client.PromptRegistry().SetPromptAlias(ctx, promptName, "production", 1)
+	if err != nil {
+		t.Fatalf("SetPromptAlias() error = %v", err)
+	}
+
+	// Load by alias and verify it returns version 1
+	loaded, err := client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithAlias("production"))
+	if err != nil {
+		t.Fatalf("LoadPrompt(WithAlias) error = %v", err)
+	}
+	if loaded.Version != 1 {
+		t.Errorf("Expected version 1 via alias, got %d", loaded.Version)
+	}
+	if loaded.Template != "Version 1 template" {
+		t.Errorf("Template = %q, want %q", loaded.Template, "Version 1 template")
+	}
+
+	// Move alias to version 2
+	err = client.PromptRegistry().SetPromptAlias(ctx, promptName, "production", 2)
+	if err != nil {
+		t.Fatalf("SetPromptAlias() reassign error = %v", err)
+	}
+
+	loaded2, err := client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithAlias("production"))
+	if err != nil {
+		t.Fatalf("LoadPrompt(WithAlias) after reassign error = %v", err)
+	}
+	if loaded2.Version != 2 {
+		t.Errorf("Expected version 2 via alias after reassign, got %d", loaded2.Version)
+	}
+
+	// Delete alias
+	err = client.PromptRegistry().DeletePromptAlias(ctx, promptName, "production")
+	if err != nil {
+		t.Fatalf("DeletePromptAlias() error = %v", err)
+	}
+
+	// Loading by deleted alias should fail.
+	// MLflow returns INVALID_PARAMETER_VALUE (not RESOURCE_DOES_NOT_EXIST) for missing aliases.
+	_, err = client.PromptRegistry().LoadPrompt(ctx, promptName, promptregistry.WithAlias("production"))
+	if err == nil {
+		t.Fatal("Expected error loading deleted alias")
+	}
+	t.Logf("Loading deleted alias returned expected error: %v", err)
+
+	// Cleanup
+	_ = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 1)
+	_ = client.PromptRegistry().DeletePromptVersion(ctx, promptName, 2)
+	_ = client.PromptRegistry().DeletePrompt(ctx, promptName)
+
+	t.Log("PromptAliasRoundTrip test passed")
+}

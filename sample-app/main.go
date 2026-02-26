@@ -10,6 +10,7 @@ import (
 
 	"github.com/opendatahub-io/mlflow-go/mlflow"
 	"github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
+	"github.com/opendatahub-io/mlflow-go/mlflow/tracking"
 )
 
 func main() {
@@ -31,6 +32,7 @@ func main() {
 		fmt.Printf("Connected to MLflow at %s\n\n", client.TrackingURI())
 
 		runPromptDemo(ctx, client)
+		runTrackingDemo(ctx, client)
 		fmt.Println("\n=== All operations completed successfully! ===")
 	}
 }
@@ -357,6 +359,209 @@ func runWorkspaceDemo(ctx context.Context) {
 	_ = bella.PromptRegistry().DeletePromptVersion(ctx, wsPromptName, 1)
 	_ = bella.PromptRegistry().DeletePrompt(ctx, wsPromptName)
 	fmt.Println("  Workspace isolation demo complete!")
+}
+
+// runTrackingDemo demonstrates experiment tracking: create experiments, log runs
+// with metrics/params/tags, search, and cleanup.
+func runTrackingDemo(ctx context.Context, client *mlflow.Client) {
+	fmt.Println("\n========================================")
+	fmt.Println("  Experiment Tracking")
+	fmt.Println("========================================")
+
+	// === Path 9: List all experiments ===
+	fmt.Println("\n=== 9. SearchExperiments: Listing all experiments ===")
+	allExps, err := client.Tracking().SearchExperiments(ctx)
+	if err != nil {
+		log.Fatalf("Failed to list experiments: %v", err)
+	}
+	fmt.Printf("  Found %d experiment(s):\n", len(allExps.Experiments))
+	for _, e := range allExps.Experiments {
+		fmt.Printf("    - [%s] %s (lifecycle: %s)\n", e.ID, e.Name, e.LifecycleStage)
+	}
+
+	// === Path 10: Create experiment ===
+	expName := fmt.Sprintf("bella-dora-training-%d", rand.IntN(10000))
+	fmt.Println("\n=== 10. CreateExperiment: Creating a new experiment ===")
+	expID, err := client.Tracking().CreateExperiment(ctx, expName)
+	if err != nil {
+		log.Fatalf("Failed to create experiment: %v", err)
+	}
+	fmt.Printf("  Created experiment %q (ID: %s)\n", expName, expID)
+
+	// === Path 11: Get experiment ===
+	fmt.Println("\n=== 11. GetExperiment: Retrieving experiment by ID ===")
+	exp, err := client.Tracking().GetExperiment(ctx, expID)
+	if err != nil {
+		log.Fatalf("Failed to get experiment: %v", err)
+	}
+	fmt.Printf("  Name: %s\n  Lifecycle: %s\n", exp.Name, exp.LifecycleStage)
+
+	// === Path 11b: Get experiment by name ===
+	fmt.Println("\n=== 11b. GetExperimentByName ===")
+	expByName, err := client.Tracking().GetExperimentByName(ctx, expName)
+	if err != nil {
+		log.Fatalf("Failed to get experiment by name: %v", err)
+	}
+	fmt.Printf("  Found experiment ID: %s\n", expByName.ID)
+
+	// === Path 12: Update experiment ===
+	updatedExpName := expName + "-updated"
+	fmt.Println("\n=== 12. UpdateExperiment: Renaming experiment ===")
+	err = client.Tracking().UpdateExperiment(ctx, expID, updatedExpName)
+	if err != nil {
+		log.Fatalf("Failed to update experiment: %v", err)
+	}
+	fmt.Printf("  Renamed to %q\n", updatedExpName)
+
+	// === Path 13: Set experiment tag ===
+	fmt.Println("\n=== 13. SetExperimentTag ===")
+	err = client.Tracking().SetExperimentTag(ctx, expID, "team", "ml-platform")
+	if err != nil {
+		log.Fatalf("Failed to set experiment tag: %v", err)
+	}
+	fmt.Printf("  Set tag team=ml-platform\n")
+
+	// === Path 14: Create run ===
+	fmt.Println("\n=== 14. CreateRun: Creating a training run ===")
+	run, err := client.Tracking().CreateRun(ctx, expID,
+		tracking.WithRunName("sklearn-training"),
+		tracking.WithRunTags(map[string]string{"model": "random-forest"}),
+	)
+	if err != nil {
+		log.Fatalf("Failed to create run: %v", err)
+	}
+	runID := run.Info.RunID
+	fmt.Printf("  Created run %s (status: %s)\n", runID, run.Info.Status)
+
+	// === Path 15: Log metrics ===
+	fmt.Println("\n=== 15. LogMetric: Logging training metrics ===")
+	for step := int64(1); step <= 3; step++ {
+		rmse := 1.0 - float64(step)*0.2
+		err = client.Tracking().LogMetric(ctx, runID, "rmse", rmse, tracking.WithStep(step))
+		if err != nil {
+			log.Fatalf("Failed to log metric at step %d: %v", step, err)
+		}
+		fmt.Printf("  Step %d: rmse=%.2f\n", step, rmse)
+	}
+
+	// === Path 16: Log params ===
+	fmt.Println("\n=== 16. LogParam: Logging hyperparameters ===")
+	err = client.Tracking().LogParam(ctx, runID, "n_estimators", "100")
+	if err != nil {
+		log.Fatalf("Failed to log param: %v", err)
+	}
+	err = client.Tracking().LogParam(ctx, runID, "max_depth", "5")
+	if err != nil {
+		log.Fatalf("Failed to log param: %v", err)
+	}
+	fmt.Printf("  n_estimators=100, max_depth=5\n")
+
+	// === Path 17: Set tag ===
+	fmt.Println("\n=== 17. SetTag: Adding run tag ===")
+	err = client.Tracking().SetTag(ctx, runID, "notes", "baseline model")
+	if err != nil {
+		log.Fatalf("Failed to set tag: %v", err)
+	}
+	fmt.Printf("  Set tag notes=\"baseline model\"\n")
+
+	// === Path 18: Log batch ===
+	fmt.Println("\n=== 18. LogBatch: Batch logging metrics, params, and tags ===")
+	err = client.Tracking().LogBatch(ctx, runID,
+		[]tracking.Metric{
+			{Key: "accuracy", Value: 0.95, Step: 1},
+			{Key: "f1_score", Value: 0.93, Step: 1},
+		},
+		[]tracking.Param{
+			{Key: "random_state", Value: "42"},
+		},
+		map[string]string{
+			"framework": "scikit-learn",
+		},
+	)
+	if err != nil {
+		log.Fatalf("Failed to log batch: %v", err)
+	}
+	fmt.Printf("  Logged 2 metrics, 1 param, 1 tag in batch\n")
+
+	// === Path 19: Get run ===
+	fmt.Println("\n=== 19. GetRun: Verifying logged data ===")
+	loadedRun, err := client.Tracking().GetRun(ctx, runID)
+	if err != nil {
+		log.Fatalf("Failed to get run: %v", err)
+	}
+	fmt.Printf("  Run: %s\n", loadedRun.Info.RunID)
+	fmt.Printf("  Status: %s\n", loadedRun.Info.Status)
+	fmt.Printf("  Params (%d):\n", len(loadedRun.Data.Params))
+	for _, p := range loadedRun.Data.Params {
+		fmt.Printf("    %s = %s\n", p.Key, p.Value)
+	}
+	fmt.Printf("  Metrics (%d):\n", len(loadedRun.Data.Metrics))
+	for _, m := range loadedRun.Data.Metrics {
+		fmt.Printf("    %s = %.4f (step %d)\n", m.Key, m.Value, m.Step)
+	}
+
+	// === Path 20: Update run ===
+	fmt.Println("\n=== 20. UpdateRun: Marking run as finished ===")
+	updatedInfo, err := client.Tracking().UpdateRun(ctx, runID,
+		tracking.WithStatus(tracking.RunStatusFinished),
+		tracking.WithEndTime(time.Now()),
+	)
+	if err != nil {
+		log.Fatalf("Failed to update run: %v", err)
+	}
+	fmt.Printf("  Status: %s\n", updatedInfo.Status)
+
+	// === Path 21: Search experiments by filter ===
+	fmt.Println("\n=== 21. SearchExperiments: Filtering by name ===")
+	expResults, err := client.Tracking().SearchExperiments(ctx,
+		tracking.WithExperimentsFilter(fmt.Sprintf("name = '%s'", updatedExpName)),
+	)
+	if err != nil {
+		log.Fatalf("Failed to search experiments: %v", err)
+	}
+	fmt.Printf("  Found %d experiment(s) matching filter\n", len(expResults.Experiments))
+
+	// === Path 22: Search runs ===
+	fmt.Println("\n=== 22. SearchRuns: Searching with metric filter ===")
+	runResults, err := client.Tracking().SearchRuns(ctx, []string{expID},
+		tracking.WithRunsFilter("metrics.accuracy > 0.9"),
+	)
+	if err != nil {
+		log.Fatalf("Failed to search runs: %v", err)
+	}
+	fmt.Printf("  Found %d run(s) with accuracy > 0.9\n", len(runResults.Runs))
+
+	// === Path 23: Delete tag ===
+	fmt.Println("\n=== 23. DeleteTag: Removing a run tag ===")
+	err = client.Tracking().DeleteTag(ctx, runID, "notes")
+	if err != nil {
+		log.Fatalf("Failed to delete tag: %v", err)
+	}
+	fmt.Printf("  Deleted tag 'notes'\n")
+
+	// === Path 24: Cleanup ===
+	fmt.Println("\n=== 24. Cleanup: Deleting run and experiment ===")
+	err = client.Tracking().DeleteRun(ctx, runID)
+	if err != nil {
+		log.Fatalf("Failed to delete run: %v", err)
+	}
+	fmt.Printf("  Deleted run %s\n", runID)
+
+	err = client.Tracking().DeleteExperiment(ctx, expID)
+	if err != nil {
+		log.Fatalf("Failed to delete experiment: %v", err)
+	}
+	fmt.Printf("  Deleted experiment %s\n", expID)
+
+	// Verify deletion (MLflow soft-deletes experiments)
+	deletedExp, err := client.Tracking().GetExperiment(ctx, expID)
+	if err != nil {
+		log.Fatalf("Failed to get deleted experiment: %v", err)
+	}
+	if deletedExp.LifecycleStage != "deleted" {
+		log.Fatalf("Expected lifecycle_stage 'deleted', got: %s", deletedExp.LifecycleStage)
+	}
+	fmt.Printf("  Verified: experiment lifecycle_stage is 'deleted'\n")
 }
 
 func printPromptVersion(pv *promptregistry.PromptVersion) {

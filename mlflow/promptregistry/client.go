@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opendatahub-io/mlflow-go/internal/conv"
 	"github.com/opendatahub-io/mlflow-go/internal/errors"
 	"github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb"
 	"github.com/opendatahub-io/mlflow-go/internal/transport"
@@ -117,10 +118,10 @@ func modelVersionToPromptVersion(mv *mlflowpb.ModelVersion) *PromptVersion {
 	}
 
 	// Convert timestamps
-	if mv.CreationTimestamp != nil && *mv.CreationTimestamp > 0 {
+	if mv.CreationTimestamp != nil {
 		pv.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
 	}
-	if mv.LastUpdatedTimestamp != nil && *mv.LastUpdatedTimestamp > 0 {
+	if mv.LastUpdatedTimestamp != nil {
 		pv.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
 	}
 
@@ -195,10 +196,10 @@ func modelVersionToPromptVersionWithoutTemplate(mv *mlflowpb.ModelVersion) Promp
 	}
 
 	// Convert timestamps
-	if mv.CreationTimestamp != nil && *mv.CreationTimestamp > 0 {
+	if mv.CreationTimestamp != nil {
 		pv.CreatedAt = time.UnixMilli(*mv.CreationTimestamp)
 	}
-	if mv.LastUpdatedTimestamp != nil && *mv.LastUpdatedTimestamp > 0 {
+	if mv.LastUpdatedTimestamp != nil {
 		pv.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
 	}
 
@@ -238,7 +239,7 @@ func registeredModelToPrompt(rm *mlflowpb.RegisteredModel) Prompt {
 		Tags:        make(map[string]string),
 	}
 
-	if rm.CreationTimestamp != nil && *rm.CreationTimestamp > 0 {
+	if rm.CreationTimestamp != nil {
 		p.CreationTimestamp = time.UnixMilli(*rm.CreationTimestamp)
 	}
 
@@ -321,7 +322,7 @@ func (c *Client) ensureRegisteredModel(ctx context.Context, name string) error {
 	req := &mlflowpb.CreateRegisteredModel{
 		Name: &name,
 		Tags: []*mlflowpb.RegisteredModelTag{
-			{Key: ptr(tagIsPrompt), Value: ptr("true")},
+			{Key: conv.Ptr(tagIsPrompt), Value: conv.Ptr("true")},
 		},
 	}
 
@@ -343,9 +344,9 @@ func (c *Client) ensureRegisteredModel(ctx context.Context, name string) error {
 func (c *Client) createTextPromptVersion(ctx context.Context, name, template string, opts *registerOptions) (*PromptVersion, error) {
 	// Build tags for the version
 	tags := []*mlflowpb.ModelVersionTag{
-		{Key: ptr(tagPromptText), Value: ptr(template)},
-		{Key: ptr(tagPromptType), Value: ptr(promptTypeText)},
-		{Key: ptr(tagIsPrompt), Value: ptr("true")},
+		{Key: conv.Ptr(tagPromptText), Value: conv.Ptr(template)},
+		{Key: conv.Ptr(tagPromptType), Value: conv.Ptr(promptTypeText)},
+		{Key: conv.Ptr(tagIsPrompt), Value: conv.Ptr("true")},
 	}
 
 	// Add model config if provided
@@ -354,12 +355,12 @@ func (c *Client) createTextPromptVersion(ctx context.Context, name, template str
 		if err != nil {
 			return nil, fmt.Errorf("failed to serialize model config: %w", err)
 		}
-		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(tagModelConfig), Value: ptr(string(configJSON))})
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: conv.Ptr(tagModelConfig), Value: conv.Ptr(string(configJSON))})
 	}
 
 	// Add user-provided tags
 	for k, v := range opts.tags {
-		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(k), Value: ptr(v)})
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: conv.Ptr(k), Value: conv.Ptr(v)})
 	}
 
 	source := "mlflow-artifacts:/" + name
@@ -390,9 +391,9 @@ func (c *Client) createChatPromptVersion(ctx context.Context, name string, messa
 
 	// Build tags for the version
 	tags := []*mlflowpb.ModelVersionTag{
-		{Key: ptr(tagPromptText), Value: ptr(string(messagesJSON))},
-		{Key: ptr(tagPromptType), Value: ptr(promptTypeChat)},
-		{Key: ptr(tagIsPrompt), Value: ptr("true")},
+		{Key: conv.Ptr(tagPromptText), Value: conv.Ptr(string(messagesJSON))},
+		{Key: conv.Ptr(tagPromptType), Value: conv.Ptr(promptTypeChat)},
+		{Key: conv.Ptr(tagIsPrompt), Value: conv.Ptr("true")},
 	}
 
 	// Add model config if provided
@@ -402,12 +403,12 @@ func (c *Client) createChatPromptVersion(ctx context.Context, name string, messa
 		if err != nil {
 			return nil, fmt.Errorf("failed to serialize model config: %w", err)
 		}
-		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(tagModelConfig), Value: ptr(string(configJSON))})
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: conv.Ptr(tagModelConfig), Value: conv.Ptr(string(configJSON))})
 	}
 
 	// Add user-provided tags
 	for k, v := range opts.tags {
-		tags = append(tags, &mlflowpb.ModelVersionTag{Key: ptr(k), Value: ptr(v)})
+		tags = append(tags, &mlflowpb.ModelVersionTag{Key: conv.Ptr(k), Value: conv.Ptr(v)})
 	}
 
 	source := "mlflow-artifacts:/" + name
@@ -614,17 +615,16 @@ func (c *Client) SetPromptAlias(ctx context.Context, name, alias string, version
 		return fmt.Errorf("mlflow: version must be positive")
 	}
 
-	tagKey := aliasTagPrefix + alias
-	tagValue := strconv.Itoa(version)
+	versionStr := strconv.Itoa(version)
 
-	req := &mlflowpb.SetRegisteredModelTag{
-		Name:  &name,
-		Key:   &tagKey,
-		Value: &tagValue,
+	req := &mlflowpb.SetRegisteredModelAlias{
+		Name:    &name,
+		Alias:   &alias,
+		Version: &versionStr,
 	}
 
-	var resp mlflowpb.SetRegisteredModelTag_Response
-	err := c.transport.Post(ctx, "/api/2.0/mlflow/registered-models/set-tag", req, &resp)
+	var resp mlflowpb.SetRegisteredModelAlias_Response
+	err := c.transport.Post(ctx, "/api/2.0/mlflow/registered-models/alias", req, &resp)
 	if err != nil {
 		return fmt.Errorf("failed to set alias: %w", err)
 	}
@@ -641,15 +641,13 @@ func (c *Client) DeletePromptAlias(ctx context.Context, name, alias string) erro
 		return fmt.Errorf("mlflow: alias is required")
 	}
 
-	tagKey := aliasTagPrefix + alias
-
-	req := &mlflowpb.DeleteRegisteredModelTag{
-		Name: &name,
-		Key:  &tagKey,
+	req := &mlflowpb.DeleteRegisteredModelAlias{
+		Name:  &name,
+		Alias: &alias,
 	}
 
-	var resp mlflowpb.DeleteRegisteredModelTag_Response
-	err := c.transport.Delete(ctx, "/api/2.0/mlflow/registered-models/delete-tag", req, &resp)
+	var resp mlflowpb.DeleteRegisteredModelAlias_Response
+	err := c.transport.Delete(ctx, "/api/2.0/mlflow/registered-models/alias", req, &resp)
 	if err != nil {
 		return fmt.Errorf("failed to delete alias: %w", err)
 	}
@@ -766,9 +764,4 @@ func escapeFilterValue(s string) string {
 // joinFilters joins filter conditions with AND.
 func joinFilters(filters []string) string {
 	return strings.Join(filters, " AND ")
-}
-
-// ptr returns a pointer to the given value.
-func ptr[T any](v T) *T {
-	return &v
 }

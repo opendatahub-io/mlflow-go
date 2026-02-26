@@ -1,0 +1,10 @@
+syntax = "proto2";
+
+package assessments;
+
+option go_package = "github.com/opendatahub-io/mlflow-go/internal/gen/assessmentspb";
+
+// Stub for assessments.proto — only declares types referenced by service.proto.
+message Assessment {
+  optional string assessment_id = 1;
+}

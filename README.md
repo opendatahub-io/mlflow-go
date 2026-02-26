@@ -1,8 +1,16 @@
 # mlflow-go
 
-A Go SDK for [MLflow](https://mlflow.org). Currently supports the Prompt Registry, with more capabilities planned.
+A Go SDK for [MLflow](https://mlflow.org). Supports Experiment Tracking and the Prompt Registry.
 
 ## Features
+
+### Experiment Tracking
+
+- Create, get, update, and delete experiments
+- Create, get, update, and delete runs
+- Log metrics (single and batch), parameters, and tags
+- Search experiments and runs with filter expressions
+- Typed run status constants and view type filters
 
 ### Prompt Registry
 
@@ -142,6 +150,119 @@ client, err := mlflow.NewClient(
     mlflow.WithInsecure(),
 )
 ```
+
+## Experiment Tracking
+
+### Create an Experiment and Log a Run
+
+```go
+import "github.com/opendatahub-io/mlflow-go/mlflow/tracking"
+
+ctx := context.Background()
+
+// Create an experiment
+expID, err := client.Tracking().CreateExperiment(ctx, "my-experiment")
+
+// Create a run in the experiment
+run, err := client.Tracking().CreateRun(ctx, expID,
+    tracking.WithRunName("training-run-1"),
+    tracking.WithRunTags(map[string]string{"model": "sklearn"}),
+)
+runID := run.Info.RunID
+
+// Log metrics, params, and tags
+err = client.Tracking().LogMetric(ctx, runID, "rmse", 0.85, tracking.WithStep(1))
+err = client.Tracking().LogParam(ctx, runID, "learning_rate", "0.01")
+err = client.Tracking().SetTag(ctx, runID, "status", "training")
+
+// Mark run as finished
+info, err := client.Tracking().UpdateRun(ctx, runID,
+    tracking.WithStatus(tracking.RunStatusFinished),
+    tracking.WithEndTime(time.Now()),
+)
+```
+
+### Batch Logging
+
+```go
+err := client.Tracking().LogBatch(ctx, runID,
+    []tracking.Metric{
+        {Key: "loss", Value: 0.5, Step: 1},
+        {Key: "loss", Value: 0.3, Step: 2},
+        {Key: "accuracy", Value: 0.92, Step: 1},
+    },
+    []tracking.Param{
+        {Key: "optimizer", Value: "adam"},
+        {Key: "batch_size", Value: "32"},
+    },
+    map[string]string{
+        "framework": "pytorch",
+    },
+)
+```
+
+### List All Experiments
+
+```go
+// List experiments (default: active only; use WithExperimentsViewType for deleted/all)
+experiments, err := client.Tracking().SearchExperiments(ctx)
+for _, e := range experiments.Experiments {
+    fmt.Printf("[%s] %s (lifecycle: %s)\n", e.ID, e.Name, e.LifecycleStage)
+}
+```
+
+### Search Experiments and Runs
+
+```go
+// Search experiments by name
+experiments, err := client.Tracking().SearchExperiments(ctx,
+    tracking.WithExperimentsFilter("name = 'my-experiment'"),
+)
+
+// Search runs with metric filter
+runs, err := client.Tracking().SearchRuns(ctx, []string{expID},
+    tracking.WithRunsFilter("metrics.rmse < 1"),
+    tracking.WithRunsOrderBy("metrics.rmse ASC"),
+    tracking.WithRunsMaxResults(10),
+)
+for _, r := range runs.Runs {
+    fmt.Printf("Run %s: status=%s\n", r.Info.RunID, r.Info.Status)
+}
+```
+
+### Get and Delete
+
+```go
+// Get experiment by ID or name
+exp, err := client.Tracking().GetExperiment(ctx, expID)
+exp, err = client.Tracking().GetExperimentByName(ctx, "my-experiment")
+
+// Get run
+run, err := client.Tracking().GetRun(ctx, runID)
+
+// Delete tag, run, experiment
+err = client.Tracking().DeleteTag(ctx, runID, "status")
+err = client.Tracking().DeleteRun(ctx, runID)
+err = client.Tracking().DeleteExperiment(ctx, expID)
+```
+
+### View Types
+
+Use typed constants to filter by lifecycle stage:
+
+```go
+// Search only deleted experiments
+experiments, err := client.Tracking().SearchExperiments(ctx,
+    tracking.WithExperimentsViewType(tracking.ViewTypeDeletedOnly),
+)
+
+// Search all runs (active + deleted)
+runs, err := client.Tracking().SearchRuns(ctx, []string{expID},
+    tracking.WithRunsViewType(tracking.ViewTypeAll),
+)
+```
+
+## Prompt Registry
 
 ## Core Types
 
@@ -382,7 +503,23 @@ if err != nil {
 
 ## Feature Comparison with Python SDK
 
-This Go SDK covers the core Prompt Registry functionality. Some advanced features from the [Python SDK](https://mlflow.org/docs/latest/genai/prompt-registry/) are not yet implemented:
+### Experiment Tracking
+
+| Feature | Status |
+|---------|--------|
+| Create/get/update/delete experiments | ✅ Supported |
+| Create/get/update/delete runs | ✅ Supported |
+| Log metrics (single + batch) | ✅ Supported |
+| Log params (single + batch) | ✅ Supported |
+| Set/delete tags (single + batch) | ✅ Supported |
+| Search experiments and runs | ✅ Supported |
+| Typed run status and view type | ✅ Supported |
+| Set experiment tags | ✅ Supported |
+| Restore experiments/runs | ❌ Not yet |
+| Metric history | ❌ Not yet |
+| Artifact management | ❌ Not yet |
+
+### Prompt Registry
 
 | Feature | Status |
 |---------|--------|
@@ -463,11 +600,16 @@ mlflow-go/
 │   ├── client.go               # Root client with domain accessors
 │   ├── options.go              # Client-level options
 │   ├── errors.go               # Error types and helpers
+│   ├── tracking/               # Experiment Tracking sub-client
+│   │   ├── client.go           # Tracking API methods
+│   │   ├── types.go            # Experiment, Run, Metric, Param types
+│   │   └── options.go          # Domain-specific options
 │   └── promptregistry/         # Prompt Registry sub-client
 │       ├── client.go           # PromptRegistry API methods
 │       ├── prompt.go           # Prompt, PromptInfo types
 │       └── options.go          # Domain-specific options
 ├── internal/                   # Internal packages
+│   ├── conv/                   # Shared type-conversion helpers
 │   ├── errors/                 # APIError implementation
 │   └── transport/              # HTTP client
 ├── sample-app/                 # Demo application

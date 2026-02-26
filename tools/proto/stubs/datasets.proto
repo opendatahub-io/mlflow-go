@@ -1,0 +1,16 @@
+syntax = "proto2";
+
+package datasets;
+
+option go_package = "github.com/opendatahub-io/mlflow-go/internal/gen/datasetspb";
+
+// Stub for datasets.proto — only declares types referenced by service.proto.
+message Dataset {
+  optional string dataset_id = 1;
+}
+
+message DatasetRecordSource {
+  enum SourceType {
+    UNKNOWN = 0;
+  }
+}

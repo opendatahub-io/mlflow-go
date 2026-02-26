@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package opentelemetry.proto.trace.v1;
+
+option go_package = "github.com/opendatahub-io/mlflow-go/internal/gen/otelpb";
+
+// Stub for opentelemetry trace.proto — only declares types referenced by service.proto.
+message Span {
+  string trace_id = 1;
+}

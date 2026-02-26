@@ -26,9 +26,10 @@ mkdir -p "${OUTPUT_DIR}"
 # Base URL for raw proto files
 BASE_URL="https://raw.githubusercontent.com/mlflow/mlflow/${MLFLOW_COMMIT}/mlflow/protos"
 
-# Proto files needed for Prompt Registry (Model Registry for OSS MLflow)
+# Proto files needed for the Go SDK
 PROTO_FILES=(
     "model_registry.proto"
+    "service.proto"
 )
 
 echo "Fetching MLflow protos from commit ${MLFLOW_COMMIT}..."
@@ -49,6 +50,21 @@ for proto in "${PROTO_FILES[@]}"; do
         -e '/(scalapb.message)/d' \
         "${proto_file}" > "${tmp_file}" && mv "${tmp_file}" "${proto_file}"
 done
+
+# Post-process service.proto: remove error_codes array blocks that protoc can't parse
+# (our databricks.proto stub defines error_codes as string, not repeated enum)
+if [[ -f "${OUTPUT_DIR}/service.proto" ]]; then
+    echo "  Post-processing: removing error_codes blocks from service.proto..."
+    python3 -c "
+import re, sys
+with open(sys.argv[1]) as f:
+    content = f.read()
+# Remove error_codes: [...] blocks (multi-line array syntax)
+content = re.sub(r'\s*error_codes:\s*\[.*?\]', '', content, flags=re.DOTALL)
+with open(sys.argv[1], 'w') as f:
+    f.write(content)
+" "${OUTPUT_DIR}/service.proto"
+fi
 
 echo "Proto files downloaded to ${OUTPUT_DIR}"
 echo ""
