@@ -24,8 +24,8 @@ func main() {
 		fmt.Println("\n=== Workspace demo completed successfully! ===")
 	} else {
 		// Prompt lifecycle demo
-		// Run with: make run-sample
-		client, err := mlflow.NewClient(mlflow.WithInsecure())
+		// Run with: make run-sample (local) or make run-sample-remote (.env.local)
+		client, err := mlflow.NewClient(clientOptions()...)
 		if err != nil {
 			log.Fatalf("Failed to create client: %v", err)
 		}
@@ -212,8 +212,12 @@ func runPromptDemo(ctx context.Context, client *mlflow.Client) {
 	}
 
 	// === 8. Delete operations ===
-	fmt.Println("\n=== 8. Delete Operations: Cleaning up prompts ===")
-	deleteDemo(ctx, client, promptName, chatPromptName)
+	if os.Getenv("MLFLOW_DEMO_NO_CLEANUP") != "true" {
+		fmt.Println("\n=== 8. Delete Operations: Cleaning up prompts ===")
+		deleteDemo(ctx, client, promptName, chatPromptName)
+	} else {
+		fmt.Println("\n=== 8. Skipping cleanup (MLFLOW_DEMO_NO_CLEANUP=true) ===")
+	}
 }
 
 // deleteDemo demonstrates delete operations for tags, versions, aliases, and prompts.
@@ -382,7 +386,9 @@ func runTrackingDemo(ctx context.Context, client *mlflow.Client) {
 	// === Path 10: Create experiment ===
 	expName := fmt.Sprintf("bella-dora-training-%d", rand.IntN(10000))
 	fmt.Println("\n=== 10. CreateExperiment: Creating a new experiment ===")
-	expID, err := client.Tracking().CreateExperiment(ctx, expName)
+	expID, err := client.Tracking().CreateExperiment(ctx, expName,
+		tracking.WithExperimentKind(tracking.ExperimentKindMLDevelopment),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create experiment: %v", err)
 	}
@@ -531,37 +537,60 @@ func runTrackingDemo(ctx context.Context, client *mlflow.Client) {
 	}
 	fmt.Printf("  Found %d run(s) with accuracy > 0.9\n", len(runResults.Runs))
 
-	// === Path 23: Delete tag ===
-	fmt.Println("\n=== 23. DeleteTag: Removing a run tag ===")
-	err = client.Tracking().DeleteTag(ctx, runID, "notes")
-	if err != nil {
-		log.Fatalf("Failed to delete tag: %v", err)
-	}
-	fmt.Printf("  Deleted tag 'notes'\n")
+	if os.Getenv("MLFLOW_DEMO_NO_CLEANUP") != "true" {
+		// === Path 23: Delete tag ===
+		fmt.Println("\n=== 23. DeleteTag: Removing a run tag ===")
+		err = client.Tracking().DeleteTag(ctx, runID, "notes")
+		if err != nil {
+			log.Fatalf("Failed to delete tag: %v", err)
+		}
+		fmt.Printf("  Deleted tag 'notes'\n")
 
-	// === Path 24: Cleanup ===
-	fmt.Println("\n=== 24. Cleanup: Deleting run and experiment ===")
-	err = client.Tracking().DeleteRun(ctx, runID)
-	if err != nil {
-		log.Fatalf("Failed to delete run: %v", err)
-	}
-	fmt.Printf("  Deleted run %s\n", runID)
+		// === Path 24: Cleanup ===
+		fmt.Println("\n=== 24. Cleanup: Deleting run and experiment ===")
+		err = client.Tracking().DeleteRun(ctx, runID)
+		if err != nil {
+			log.Fatalf("Failed to delete run: %v", err)
+		}
+		fmt.Printf("  Deleted run %s\n", runID)
 
-	err = client.Tracking().DeleteExperiment(ctx, expID)
-	if err != nil {
-		log.Fatalf("Failed to delete experiment: %v", err)
-	}
-	fmt.Printf("  Deleted experiment %s\n", expID)
+		err = client.Tracking().DeleteExperiment(ctx, expID)
+		if err != nil {
+			log.Fatalf("Failed to delete experiment: %v", err)
+		}
+		fmt.Printf("  Deleted experiment %s\n", expID)
 
-	// Verify deletion (MLflow soft-deletes experiments)
-	deletedExp, err := client.Tracking().GetExperiment(ctx, expID)
-	if err != nil {
-		log.Fatalf("Failed to get deleted experiment: %v", err)
+		// Verify deletion (MLflow soft-deletes experiments)
+		deletedExp, err := client.Tracking().GetExperiment(ctx, expID)
+		if err != nil {
+			log.Fatalf("Failed to get deleted experiment: %v", err)
+		}
+		if deletedExp.LifecycleStage != "deleted" {
+			log.Fatalf("Expected lifecycle_stage 'deleted', got: %s", deletedExp.LifecycleStage)
+		}
+		fmt.Printf("  Verified: experiment lifecycle_stage is 'deleted'\n")
+	} else {
+		fmt.Println("\n=== 23-24. Skipping cleanup (MLFLOW_DEMO_NO_CLEANUP=true) ===")
 	}
-	if deletedExp.LifecycleStage != "deleted" {
-		log.Fatalf("Expected lifecycle_stage 'deleted', got: %s", deletedExp.LifecycleStage)
+}
+
+// clientOptions builds MLflow client options from environment variables.
+// MLFLOW_AUTH_TOKEN and MLFLOW_WORKSPACE are forwarded as HTTP headers.
+func clientOptions() []mlflow.Option {
+	var opts []mlflow.Option
+
+	headers := make(map[string]string)
+	if token := os.Getenv("MLFLOW_AUTH_TOKEN"); token != "" {
+		headers["Authorization"] = "Bearer " + token
 	}
-	fmt.Printf("  Verified: experiment lifecycle_stage is 'deleted'\n")
+	if ws := os.Getenv("MLFLOW_WORKSPACE"); ws != "" {
+		headers["X-MLFLOW-WORKSPACE"] = ws
+	}
+	if len(headers) > 0 {
+		opts = append(opts, mlflow.WithHeaders(headers))
+	}
+
+	return opts
 }
 
 func printPromptVersion(pv *promptregistry.PromptVersion) {

@@ -1,4 +1,4 @@
-.PHONY: test/unit test/integration test/integration-ci test/integration-ci-midstream test/integration-ci-postgres gen dev/up dev/up-midstream dev/down dev/reset dev/seed dev/seed-workspaces dev/postgres-up dev/postgres-down dev/up-postgres help lint vet fmt tidy check run-sample run-sample-workspaces
+.PHONY: test/unit test/integration test/integration-ci test/integration-ci-midstream test/integration-ci-postgres gen dev/up dev/up-midstream dev/down dev/reset dev/seed dev/seed-workspaces dev/postgres-up dev/postgres-down dev/up-postgres help lint vet fmt tidy check run-sample run-sample-workspaces run-sample-remote
 
 # Configuration
 # Also update MLFLOW_VERSION in .github/workflows/go.yaml when changing this
@@ -60,6 +60,7 @@ help:
 	@echo "Sample:"
 	@echo "  make run-sample       - Run sample app (requires dev/up)"
 	@echo "  make run-sample-workspaces - Run workspace isolation demo (requires dev/up-midstream + dev/seed-workspaces)"
+	@echo "  make run-sample-remote - Run sample app against remote MLflow (requires .env.local)"
 
 # Testing targets
 test/unit:
@@ -352,3 +353,8 @@ run-sample:
 run-sample-workspaces:
 	@echo "Running workspace isolation demo..."
 	cd sample-app && MLFLOW_TRACKING_URI=http://localhost:$(MLFLOW_PORT) MLFLOW_INSECURE_SKIP_TLS_VERIFY=true MLFLOW_DEMO_WORKSPACES=true go run .
+
+run-sample-remote:
+	@test -f .env.local || (echo "ERROR: .env.local not found. Copy .env.local.example and fill in values." && exit 1)
+	@echo "Running sample app against remote MLflow..."
+	@cd sample-app && set -a && . ../.env.local && set +a && MLFLOW_DEMO_NO_CLEANUP=true go run .

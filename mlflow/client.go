@@ -78,6 +78,7 @@ func NewClient(clientOpts ...Option) (*Client, error) {
 		HTTPClient: opts.httpClient,
 		Logger:     opts.logger,
 		Timeout:    opts.timeout,
+		Insecure:   opts.insecure,
 	}
 
 	transportClient, err := transport.New(transportCfg)

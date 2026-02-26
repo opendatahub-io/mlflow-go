@@ -40,6 +40,21 @@ var protoToRunStatus = map[mlflowpb.RunStatus]RunStatus{
 	mlflowpb.RunStatus_KILLED:    RunStatusKilled,
 }
 
+// ExperimentKind classifies the type of work an experiment tracks.
+// The MLflow UI uses this to customize the experiment view.
+// Set via WithExperimentKind when creating an experiment.
+type ExperimentKind string
+
+const (
+	ExperimentKindMLDevelopment    ExperimentKind = "custom_model_development"
+	ExperimentKindGenAIDevelopment ExperimentKind = "genai_development"
+	ExperimentKindFineTuning       ExperimentKind = "finetuning"
+	ExperimentKindForecasting      ExperimentKind = "forecasting"
+	ExperimentKindClassification   ExperimentKind = "classification"
+	ExperimentKindRegression       ExperimentKind = "regression"
+	ExperimentKindAutoML           ExperimentKind = "automl"
+)
+
 // ViewType controls which lifecycle stages are returned in search results.
 type ViewType string
 

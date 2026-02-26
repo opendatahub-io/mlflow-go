@@ -3,12 +3,14 @@ package transport
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/opendatahub-io/mlflow-go/internal/errors"
@@ -29,6 +31,7 @@ type Config struct {
 	HTTPClient *http.Client
 	Logger     *slog.Logger
 	Timeout    time.Duration
+	Insecure   bool
 }
 
 // errorResponse represents the MLflow API error format.
@@ -51,6 +54,17 @@ func New(cfg Config) (*Client, error) {
 			timeout = 30 * time.Second
 		}
 		httpClient = &http.Client{Timeout: timeout}
+		if cfg.Insecure {
+			if dt, ok := http.DefaultTransport.(*http.Transport); ok {
+				tr := dt.Clone()
+				tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // user-requested via WithInsecure
+				httpClient.Transport = tr
+			} else {
+				httpClient.Transport = &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // user-requested via WithInsecure
+				}
+			}
+		}
 	}
 
 	return &Client{
@@ -77,8 +91,10 @@ func (c *Client) Delete(ctx context.Context, path string, body, result any) erro
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, result any) error {
-	// Build request URL
-	reqURL := c.baseURL.ResolveReference(&url.URL{Path: path, RawQuery: query.Encode()})
+	// Build request URL, preserving any path prefix from the base URL
+	// (e.g., base "https://host/mlflow" + path "/api/2.0/mlflow/..." → "/mlflow/api/2.0/mlflow/...")
+	fullPath := strings.TrimRight(c.baseURL.Path, "/") + path
+	reqURL := c.baseURL.ResolveReference(&url.URL{Path: fullPath, RawQuery: query.Encode()})
 
 	// Encode body if present
 	var bodyReader io.Reader

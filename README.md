@@ -160,8 +160,10 @@ import "github.com/opendatahub-io/mlflow-go/mlflow/tracking"
 
 ctx := context.Background()
 
-// Create an experiment
-expID, err := client.Tracking().CreateExperiment(ctx, "my-experiment")
+// Create an experiment with a kind (controls how the MLflow UI displays it)
+expID, err := client.Tracking().CreateExperiment(ctx, "my-experiment",
+    tracking.WithExperimentKind(tracking.ExperimentKindMLDevelopment),
+)
 
 // Create a run in the experiment
 run, err := client.Tracking().CreateRun(ctx, expID,
@@ -259,6 +261,26 @@ experiments, err := client.Tracking().SearchExperiments(ctx,
 // Search all runs (active + deleted)
 runs, err := client.Tracking().SearchRuns(ctx, []string{expID},
     tracking.WithRunsViewType(tracking.ViewTypeAll),
+)
+```
+
+### Experiment Kinds
+
+Set the experiment kind at creation time to control how the MLflow UI displays the experiment. If not set, the UI will prompt users to select a type.
+
+| Constant | Value | Use case |
+|----------|-------|----------|
+| `ExperimentKindMLDevelopment` | `custom_model_development` | Traditional ML model training |
+| `ExperimentKindGenAIDevelopment` | `genai_development` | GenAI / LLM development |
+| `ExperimentKindFineTuning` | `finetuning` | Model fine-tuning |
+| `ExperimentKindForecasting` | `forecasting` | Time series forecasting |
+| `ExperimentKindClassification` | `classification` | Classification tasks |
+| `ExperimentKindRegression` | `regression` | Regression tasks |
+| `ExperimentKindAutoML` | `automl` | Automated ML |
+
+```go
+expID, err := client.Tracking().CreateExperiment(ctx, "my-genai-experiment",
+    tracking.WithExperimentKind(tracking.ExperimentKindGenAIDevelopment),
 )
 ```
 
@@ -514,6 +536,7 @@ if err != nil {
 | Set/delete tags (single + batch) | ✅ Supported |
 | Search experiments and runs | ✅ Supported |
 | Typed run status and view type | ✅ Supported |
+| Experiment kinds (UI classification) | ✅ Supported |
 | Set experiment tags | ✅ Supported |
 | Restore experiments/runs | ❌ Not yet |
 | Metric history | ❌ Not yet |
@@ -578,6 +601,10 @@ make run-sample
 make dev/up-midstream   # in one terminal
 make dev/seed-workspaces
 make run-sample-workspaces
+
+# Run sample app against a remote MLflow instance
+cp .env.local.example .env.local   # fill in credentials
+make run-sample-remote
 
 # Run integration tests
 make test/integration
