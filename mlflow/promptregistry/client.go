@@ -208,8 +208,13 @@ func modelVersionToPromptVersionWithoutTemplate(mv *mlflowpb.ModelVersion) Promp
 		key := tag.GetKey()
 		value := tag.GetValue()
 		switch key {
-		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription, tagModelConfig:
+		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription:
 			// Internal tags, don't expose
+		case tagModelConfig:
+			var config PromptModelConfig
+			if err := json.Unmarshal([]byte(value), &config); err == nil {
+				pv.ModelConfig = &config
+			}
 		default:
 			if !strings.HasPrefix(key, aliasTagPrefix) {
 				pv.Tags[key] = value
@@ -243,10 +248,20 @@ func registeredModelToPrompt(rm *mlflowpb.RegisteredModel) Prompt {
 		p.CreationTimestamp = time.UnixMilli(*rm.CreationTimestamp)
 	}
 
-	// Get latest version number
+	// Get latest version number and model config from latest version's tags
 	if len(rm.LatestVersions) > 0 {
 		if v, err := strconv.Atoi(rm.LatestVersions[0].GetVersion()); err == nil {
 			p.LatestVersion = v
+		}
+		for _, tag := range rm.LatestVersions[0].Tags {
+			if tag.GetKey() == tagModelConfig {
+				var config PromptModelConfig
+				if err := json.Unmarshal([]byte(tag.GetValue()), &config); err == nil {
+					p.ModelConfig = &config
+				}
+
+				break
+			}
 		}
 	}
 

@@ -1146,3 +1146,139 @@ func TestDeletePromptVersionTag_EmptyKey(t *testing.T) {
 		t.Error("expected error for empty key")
 	}
 }
+
+func TestListPrompts_ModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{
+				{
+					"name":               "prompt-with-model",
+					"creation_timestamp": 1700000000000,
+					"latest_versions": []map[string]any{
+						{
+							"version": "2",
+							"tags": []map[string]string{
+								{"key": "mlflow.prompt.is_prompt", "value": "true"},
+								{"key": "_mlflow_prompt_model_config", "value": `{"model_name":"gpt-4","provider":"openai","temperature":0.7}`},
+							},
+						},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+					},
+				},
+				{
+					"name":               "prompt-without-model",
+					"creation_timestamp": 1700000000000,
+					"latest_versions": []map[string]any{
+						{
+							"version": "1",
+							"tags": []map[string]string{
+								{"key": "mlflow.prompt.is_prompt", "value": "true"},
+							},
+						},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPrompts(context.Background())
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if len(result.Prompts) != 2 {
+		t.Fatalf("got %d prompts, want 2", len(result.Prompts))
+	}
+
+	// Prompt with model config should have it populated
+	p := result.Prompts[0]
+	if p.ModelConfig == nil {
+		t.Fatal("ModelConfig should not be nil for prompt with _mlflow_prompt_model_config tag")
+	}
+	if p.ModelConfig.ModelName != "gpt-4" {
+		t.Errorf("ModelConfig.ModelName = %q, want %q", p.ModelConfig.ModelName, "gpt-4")
+	}
+	if p.ModelConfig.Provider != "openai" {
+		t.Errorf("ModelConfig.Provider = %q, want %q", p.ModelConfig.Provider, "openai")
+	}
+	if p.ModelConfig.Temperature == nil || *p.ModelConfig.Temperature != 0.7 {
+		t.Errorf("ModelConfig.Temperature = %v, want 0.7", p.ModelConfig.Temperature)
+	}
+
+	// Prompt without model config should have nil ModelConfig
+	p2 := result.Prompts[1]
+	if p2.ModelConfig != nil {
+		t.Errorf("ModelConfig should be nil for prompt without _mlflow_prompt_model_config tag, got %+v", p2.ModelConfig)
+	}
+}
+
+func TestListPromptVersions_ModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"model_versions": []map[string]any{
+				{
+					"name":               "test-prompt",
+					"version":            "2",
+					"creation_timestamp": 1700000200000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Hello {{name}}"},
+						{"key": "_mlflow_prompt_model_config", "value": `{"model_name":"claude-3","provider":"anthropic"}`},
+						{"key": "author", "value": "alice"},
+					},
+				},
+				{
+					"name":               "test-prompt",
+					"version":            "1",
+					"creation_timestamp": 1700000100000,
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Hi {{name}}"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPromptVersions(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	if len(result.Versions) != 2 {
+		t.Fatalf("got %d versions, want 2", len(result.Versions))
+	}
+
+	// Version with model config
+	v := result.Versions[0]
+	if v.ModelConfig == nil {
+		t.Fatal("ModelConfig should not be nil for version with _mlflow_prompt_model_config tag")
+	}
+	if v.ModelConfig.ModelName != "claude-3" {
+		t.Errorf("ModelConfig.ModelName = %q, want %q", v.ModelConfig.ModelName, "claude-3")
+	}
+	if v.ModelConfig.Provider != "anthropic" {
+		t.Errorf("ModelConfig.Provider = %q, want %q", v.ModelConfig.Provider, "anthropic")
+	}
+
+	// User tags should still be present
+	if v.Tags["author"] != "alice" {
+		t.Errorf("Tags[author] = %q, want %q", v.Tags["author"], "alice")
+	}
+
+	// _mlflow_prompt_model_config should NOT be in user tags
+	if _, ok := v.Tags["_mlflow_prompt_model_config"]; ok {
+		t.Error("_mlflow_prompt_model_config should not appear in user Tags")
+	}
+
+	// Version without model config
+	v2 := result.Versions[1]
+	if v2.ModelConfig != nil {
+		t.Errorf("ModelConfig should be nil for version without tag, got %+v", v2.ModelConfig)
+	}
+}
