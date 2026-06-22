@@ -243,10 +243,27 @@ func registeredModelToPrompt(rm *mlflowpb.RegisteredModel) Prompt {
 		p.CreationTimestamp = time.UnixMilli(*rm.CreationTimestamp)
 	}
 
-	// Get latest version number
+	// Get latest version number and model config from latest version
 	if len(rm.LatestVersions) > 0 {
 		if v, err := strconv.Atoi(rm.LatestVersions[0].GetVersion()); err == nil {
 			p.LatestVersion = v
+		}
+
+		// Extract model config from latest version tags
+		var modelConfigJSON string
+		for _, tag := range rm.LatestVersions[0].Tags {
+			if tag.GetKey() == tagModelConfig {
+				modelConfigJSON = tag.GetValue()
+				break
+			}
+		}
+
+		// Parse model config
+		if modelConfigJSON != "" {
+			var config PromptModelConfig
+			if err := json.Unmarshal([]byte(modelConfigJSON), &config); err == nil {
+				p.ModelConfig = &config
+			}
 		}
 	}
 
