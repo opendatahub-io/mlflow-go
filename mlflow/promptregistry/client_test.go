@@ -462,6 +462,85 @@ func TestListPrompts_WithNameFilter(t *testing.T) {
 	}
 }
 
+func TestListPrompts_WithModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{
+				{
+					"name":        "prompt-with-config",
+					"description": "Prompt with model config",
+					"latest_versions": []map[string]any{
+						{
+							"version": "1",
+							"tags": []map[string]string{
+								{"key": "_mlflow_prompt_model_config", "value": `{"provider":"openai","model_name":"gpt-4"}`},
+							},
+						},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPrompts(context.Background())
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if len(result.Prompts) != 1 {
+		t.Fatalf("got %d prompts, want 1", len(result.Prompts))
+	}
+
+	p := result.Prompts[0]
+	if p.ModelConfig == nil {
+		t.Fatal("ModelConfig should be populated")
+	}
+	if p.ModelConfig.Provider != "openai" {
+		t.Errorf("Provider = %q, want %q", p.ModelConfig.Provider, "openai")
+	}
+	if p.ModelConfig.ModelName != "gpt-4" {
+		t.Errorf("ModelName = %q, want %q", p.ModelConfig.ModelName, "gpt-4")
+	}
+}
+
+func TestListPrompts_WithoutModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{
+				{
+					"name":        "prompt-without-config",
+					"description": "Prompt without model config",
+					"latest_versions": []map[string]any{
+						{"version": "1"},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPrompts(context.Background())
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if len(result.Prompts) != 1 {
+		t.Fatalf("got %d prompts, want 1", len(result.Prompts))
+	}
+
+	p := result.Prompts[0]
+	if p.ModelConfig != nil {
+		t.Errorf("ModelConfig should be nil when tag is absent, got %v", p.ModelConfig)
+	}
+}
+
 func TestListPrompts_WithPagination(t *testing.T) {
 	var receivedPageToken string
 	var receivedMaxResults string
