@@ -203,13 +203,17 @@ func modelVersionToPromptVersionWithoutTemplate(mv *mlflowpb.ModelVersion) Promp
 		pv.UpdatedAt = time.UnixMilli(*mv.LastUpdatedTimestamp)
 	}
 
+	var modelConfigJSON string
+
 	// Process tags (filter out internal ones including template)
 	for _, tag := range mv.Tags {
 		key := tag.GetKey()
 		value := tag.GetValue()
 		switch key {
-		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription, tagModelConfig:
+		case tagPromptText, tagIsPrompt, tagPromptType, tagDescription:
 			// Internal tags, don't expose
+		case tagModelConfig:
+			modelConfigJSON = value
 		default:
 			if !strings.HasPrefix(key, aliasTagPrefix) {
 				pv.Tags[key] = value
@@ -222,6 +226,14 @@ func modelVersionToPromptVersionWithoutTemplate(mv *mlflowpb.ModelVersion) Promp
 		if tag.GetKey() == tagDescription && tag.GetValue() != "" {
 			pv.CommitMessage = tag.GetValue()
 			break
+		}
+	}
+
+	// Parse model config
+	if modelConfigJSON != "" {
+		var config PromptModelConfig
+		if err := json.Unmarshal([]byte(modelConfigJSON), &config); err == nil {
+			pv.ModelConfig = &config
 		}
 	}
 

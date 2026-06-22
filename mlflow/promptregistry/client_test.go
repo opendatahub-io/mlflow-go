@@ -780,6 +780,84 @@ func TestListPromptVersions_Success(t *testing.T) {
 	}
 }
 
+func TestListPromptVersions_WithModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"model_versions": []map[string]any{
+				{
+					"name":               "test-prompt",
+					"version":            "1",
+					"description":        "Version with config",
+					"creation_timestamp": 1700000100000,
+					"tags": []map[string]string{
+						{"key": "_mlflow_prompt_model_config", "value": `{"provider":"anthropic","model_name":"claude-3-sonnet"}`},
+						{"key": "author", "value": "bob"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPromptVersions(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	if len(result.Versions) != 1 {
+		t.Fatalf("got %d versions, want 1", len(result.Versions))
+	}
+
+	pv := result.Versions[0]
+	if pv.ModelConfig == nil {
+		t.Fatal("ModelConfig should be populated")
+	}
+	if pv.ModelConfig.Provider != "anthropic" {
+		t.Errorf("Provider = %q, want %q", pv.ModelConfig.Provider, "anthropic")
+	}
+	if pv.ModelConfig.ModelName != "claude-3-sonnet" {
+		t.Errorf("ModelName = %q, want %q", pv.ModelConfig.ModelName, "claude-3-sonnet")
+	}
+
+	// User tags should still be present
+	if pv.Tags["author"] != "bob" {
+		t.Errorf("Tags[author] = %q, want %q", pv.Tags["author"], "bob")
+	}
+}
+
+func TestListPromptVersions_WithoutModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"model_versions": []map[string]any{
+				{
+					"name":               "test-prompt",
+					"version":            "1",
+					"description":        "Version without config",
+					"creation_timestamp": 1700000100000,
+					"tags": []map[string]string{
+						{"key": "author", "value": "carol"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPromptVersions(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	if len(result.Versions) != 1 {
+		t.Fatalf("got %d versions, want 1", len(result.Versions))
+	}
+
+	pv := result.Versions[0]
+	if pv.ModelConfig != nil {
+		t.Errorf("ModelConfig should be nil when tag is absent, got %v", pv.ModelConfig)
+	}
+}
+
 func TestListPromptVersions_FallbackWhenSearchEmpty(t *testing.T) {
 	// Tests the fallback path when search returns empty (MLflow OSS eventual consistency)
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
