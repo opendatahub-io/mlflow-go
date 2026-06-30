@@ -121,14 +121,14 @@ test/integration-ci-midstream: $(UV)
 		--backend-store-uri sqlite:///$(MLFLOW_TEST_DATA)/mlflow.db \
 		--default-artifact-root $(MLFLOW_TEST_DATA)/artifacts &
 	@echo "Waiting for MLflow to be ready..."
-	@READY=0; for i in $$(seq 1 30); do \
+	@READY=0; for i in $$(seq 1 60); do \
 		if curl -s http://localhost:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
 			echo "MLflow is ready!"; \
 			READY=1; \
 			sleep 2; \
 			break; \
 		fi; \
-		echo "Waiting... ($$i/30)"; \
+		echo "Waiting... ($$i/60)"; \
 		sleep 2; \
 	done; \
 	if [ $$READY -eq 0 ]; then echo "ERROR: MLflow failed to start" && exit 1; fi
