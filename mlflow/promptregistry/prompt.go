@@ -87,6 +87,9 @@ type Prompt struct {
 	// LatestVersion is the highest version number, 0 if no versions exist.
 	LatestVersion int `json:"latest_version"`
 
+	// ModelConfig contains the model configuration from the latest version, if any.
+	ModelConfig *PromptModelConfig `json:"model_config,omitempty"`
+
 	// Tags are key-value metadata pairs.
 	Tags map[string]string `json:"tags"`
 
