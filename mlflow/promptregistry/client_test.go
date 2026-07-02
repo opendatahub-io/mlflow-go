@@ -1146,3 +1146,146 @@ func TestDeletePromptVersionTag_EmptyKey(t *testing.T) {
 		t.Error("expected error for empty key")
 	}
 }
+
+func TestListPrompts_WithModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{
+				{
+					"name": "prompt-with-model",
+					"latest_versions": []map[string]any{
+						{
+							"version": "2",
+							"tags": []map[string]string{
+								{"key": "_mlflow_prompt_model_config", "value": `{"provider":"openai","model_name":"gpt-4","temperature":0.7}`},
+							},
+						},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPrompts(context.Background())
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if len(result.Prompts) != 1 {
+		t.Fatalf("got %d prompts, want 1", len(result.Prompts))
+	}
+
+	p := result.Prompts[0]
+	if p.ModelConfig == nil {
+		t.Fatal("ModelConfig should not be nil")
+	}
+	if p.ModelConfig.Provider != "openai" {
+		t.Errorf("Provider = %q, want %q", p.ModelConfig.Provider, "openai")
+	}
+	if p.ModelConfig.ModelName != "gpt-4" {
+		t.Errorf("ModelName = %q, want %q", p.ModelConfig.ModelName, "gpt-4")
+	}
+	if p.ModelConfig.Temperature == nil || *p.ModelConfig.Temperature != 0.7 {
+		t.Errorf("Temperature = %v, want 0.7", p.ModelConfig.Temperature)
+	}
+}
+
+func TestListPrompts_WithoutModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"registered_models": []map[string]any{
+				{
+					"name": "prompt-no-model",
+					"latest_versions": []map[string]any{
+						{
+							"version": "1",
+							"tags":    []map[string]string{},
+						},
+					},
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.is_prompt", "value": "true"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPrompts(context.Background())
+	if err != nil {
+		t.Fatalf("ListPrompts() error = %v", err)
+	}
+
+	if len(result.Prompts) != 1 {
+		t.Fatalf("got %d prompts, want 1", len(result.Prompts))
+	}
+
+	if result.Prompts[0].ModelConfig != nil {
+		t.Error("ModelConfig should be nil when tag is absent")
+	}
+}
+
+func TestListPromptVersions_WithModelConfig(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"model_versions": []map[string]any{
+				{
+					"name":    "test-prompt",
+					"version": "2",
+					"tags": []map[string]string{
+						{"key": "_mlflow_prompt_model_config", "value": `{"provider":"anthropic","model_name":"claude-3"}`},
+						{"key": "mlflow.prompt.text", "value": "Template"},
+						{"key": "author", "value": "bob"},
+					},
+				},
+				{
+					"name":    "test-prompt",
+					"version": "1",
+					"tags": []map[string]string{
+						{"key": "mlflow.prompt.text", "value": "Template v1"},
+					},
+				},
+			},
+		})
+	}))
+
+	result, err := client.ListPromptVersions(context.Background(), "test-prompt")
+	if err != nil {
+		t.Fatalf("ListPromptVersions() error = %v", err)
+	}
+
+	if len(result.Versions) != 2 {
+		t.Fatalf("got %d versions, want 2", len(result.Versions))
+	}
+
+	// Version 2 has model config
+	v2 := result.Versions[0]
+	if v2.ModelConfig == nil {
+		t.Fatal("v2 ModelConfig should not be nil")
+	}
+	if v2.ModelConfig.Provider != "anthropic" {
+		t.Errorf("v2 Provider = %q, want %q", v2.ModelConfig.Provider, "anthropic")
+	}
+	if v2.ModelConfig.ModelName != "claude-3" {
+		t.Errorf("v2 ModelName = %q, want %q", v2.ModelConfig.ModelName, "claude-3")
+	}
+	// Template should still be empty in listing
+	if v2.Template != "" {
+		t.Error("Template should be empty in listing results")
+	}
+	// User tags should be present, internal tags should not
+	if v2.Tags["author"] != "bob" {
+		t.Errorf("Tags[author] = %q, want %q", v2.Tags["author"], "bob")
+	}
+
+	// Version 1 has no model config
+	v1 := result.Versions[1]
+	if v1.ModelConfig != nil {
+		t.Error("v1 ModelConfig should be nil when tag is absent")
+	}
+}
