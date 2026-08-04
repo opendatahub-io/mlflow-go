@@ -302,7 +302,9 @@ func TestCreateMCPServerVersion_EmptyServerJSON(t *testing.T) {
 }
 
 func TestCreateMCPServerVersion_ServerJSONMissingName(t *testing.T) {
-	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should not be sent when server JSON is missing a name")
+	}))
 
 	_, err := client.CreateMCPServerVersion(context.Background(), "my-server",
 		map[string]any{"version": "1.0.0"},
