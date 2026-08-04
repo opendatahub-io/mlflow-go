@@ -1,6 +1,6 @@
 # mlflow-go
 
-A Go SDK for [MLflow](https://mlflow.org). Supports Experiment Tracking and the Prompt Registry.
+A Go SDK for [MLflow](https://mlflow.org). Supports Experiment Tracking, the Prompt Registry, and the MCP Registry.
 
 ## Features
 
@@ -20,6 +20,16 @@ A Go SDK for [MLflow](https://mlflow.org). Supports Experiment Tracking and the 
 - Delete prompts, versions, and tags
 - Format prompts with variable substitution
 - Modify prompts locally with immutable operations
+
+### MCP Registry
+
+- Register, get, update, delete, and search MCP (Model Context Protocol) servers
+- Create, get, update, delete, and search server versions, each with its own `server.json`,
+  discovered tools, and per-connection-mode display settings (`connect_options`)
+- Create, get, update, search, and delete access endpoints (URLs bound to a server, version, or
+  alias)
+- Set/delete tags on servers and versions
+- Set/get/delete aliases (e.g. "production") pointing at a version
 
 ### Workspace Isolation (Midstream)
 
@@ -541,6 +551,110 @@ client, err := mlflow.NewClient(
 )
 ```
 
+## MCP Registry
+
+The MCP Registry manages [Model Context Protocol](https://modelcontextprotocol.io) servers: a
+centralized catalog for registering, versioning, and sharing MCP servers across a team. Unlike the
+Prompt Registry and Tracking APIs, the MCP Registry REST endpoints are JSON based rather than
+protobuf based.
+
+### Register a Server and a Version
+
+```go
+import "github.com/opendatahub-io/mlflow-go/mlflow/mcpregistry"
+
+server, err := client.MCPRegistry().CreateMCPServer(ctx, "com.example/my-server",
+    mcpregistry.WithServerDescription("Internal tools server"),
+)
+
+serverJSON := map[string]any{
+    "name":    "com.example/my-server",
+    "version": "1.0.0",
+    "packages": []map[string]any{
+        {"registryType": "npm", "identifier": "@example/my-mcp-server", "version": "1.0.0"},
+    },
+}
+
+version, err := client.MCPRegistry().CreateMCPServerVersion(ctx, server.Name, serverJSON,
+    mcpregistry.WithVersionStatus(mcpregistry.MCPServerVersionStatusActive),
+    mcpregistry.WithVersionConnectOptions(map[string]mcpregistry.ConnectOptionSettings{
+        "npm": {Hidden: true},
+    }),
+)
+fmt.Printf("Created %s v%s with %d tools\n", version.Name, version.Version, len(version.Tools))
+```
+
+### Update and Delete Servers and Versions
+
+```go
+// Partial update: only fields configured via options are changed
+server, err = client.MCPRegistry().UpdateMCPServer(ctx, server.Name,
+    mcpregistry.WithUpdatedServerDisplayName("My Server"),
+)
+
+version, err = client.MCPRegistry().UpdateMCPServerVersion(ctx, server.Name, version.Version,
+    mcpregistry.WithUpdatedVersionStatus(mcpregistry.MCPServerVersionStatusDeprecated),
+)
+
+err = client.MCPRegistry().DeleteMCPServerVersion(ctx, server.Name, version.Version)
+err = client.MCPRegistry().DeleteMCPServer(ctx, server.Name)
+```
+
+### Aliases
+
+```go
+err := client.MCPRegistry().SetMCPServerAlias(ctx, "com.example/my-server", "production", "1.0.0")
+
+version, err := client.MCPRegistry().GetMCPServerVersionByAlias(ctx, "com.example/my-server", "production")
+
+err = client.MCPRegistry().DeleteMCPServerAlias(ctx, "com.example/my-server", "production")
+```
+
+### Search Servers and Versions
+
+```go
+servers, err := client.MCPRegistry().SearchMCPServers(ctx,
+    mcpregistry.WithServersFilter("name LIKE 'com.example%'"),
+    mcpregistry.WithServersMaxResults(20),
+)
+
+versions, err := client.MCPRegistry().SearchMCPServerVersions(ctx, "com.example/my-server")
+```
+
+### Create and Manage Access Endpoints
+
+```go
+// Bind a reachable URL to the server's "production" alias
+endpoint, err := client.MCPRegistry().CreateMCPAccessEndpoint(ctx,
+    "com.example/my-server", "https://mcp.example.com/my-server",
+    mcpregistry.WithAccessEndpointServerAlias("production"),
+)
+
+// Search endpoints across all servers, or scope to a single server
+endpoints, err := client.MCPRegistry().SearchMCPAccessEndpoints(ctx,
+    mcpregistry.WithAccessEndpointsServerName("com.example/my-server"),
+)
+
+// Update the endpoint's URL or pin it to a different version/alias
+endpoint, err = client.MCPRegistry().UpdateMCPAccessEndpoint(ctx,
+    "com.example/my-server", endpoint.ID,
+    mcpregistry.WithUpdatedEndpointServerAlias("staging"),
+)
+
+err = client.MCPRegistry().DeleteMCPAccessEndpoint(ctx, "com.example/my-server", endpoint.ID)
+```
+
+### Tags
+
+```go
+err := client.MCPRegistry().SetMCPServerTag(ctx, "com.example/my-server", "team", "platform")
+err = client.MCPRegistry().DeleteMCPServerTag(ctx, "com.example/my-server", "team")
+
+// Tags can also be set on a specific version
+err = client.MCPRegistry().SetMCPServerVersionTag(ctx, "com.example/my-server", "1.0.0", "stage", "prod")
+err = client.MCPRegistry().DeleteMCPServerVersionTag(ctx, "com.example/my-server", "1.0.0", "stage")
+```
+
 ## Error Handling
 
 The SDK provides type-safe error checking:
@@ -607,6 +721,17 @@ if err != nil {
 | Jinja2 templates (conditionals, loops) | ❌ Not yet |
 | Response format specification | ❌ Not yet |
 | Cache TTL configuration | ❌ Not yet |
+
+### MCP Registry
+
+| Feature | Status |
+|---------|--------|
+| Register/get/update/delete/search servers | ✅ Supported |
+| Create/get/update/delete/search server versions | ✅ Supported |
+| Per-connection-mode display settings (`connect_options`) | ✅ Supported |
+| Create/get/update/search/delete access endpoints | ✅ Supported |
+| Set/delete tags on servers and versions | ✅ Supported |
+| Alias management (set/get/delete) | ✅ Supported |
 
 ## Development
 
@@ -680,9 +805,13 @@ mlflow-go/
 │   │   ├── client.go           # ListArtifacts, LogArtifact, DownloadArtifact
 │   │   ├── types.go            # FileInfo, ListArtifactsResult types
 │   │   └── options.go          # Domain-specific options
-│   └── promptregistry/         # Prompt Registry sub-client
-│       ├── client.go           # PromptRegistry API methods
-│       ├── prompt.go           # Prompt, PromptInfo types
+│   ├── promptregistry/         # Prompt Registry sub-client
+│   │   ├── client.go           # PromptRegistry API methods
+│   │   ├── prompt.go           # Prompt, PromptInfo types
+│   │   └── options.go          # Domain-specific options
+│   └── mcpregistry/            # MCP Registry sub-client
+│       ├── client.go           # MCPRegistry API methods
+│       ├── server.go           # MCPServer, MCPServerVersion, MCPAccessEndpoint types
 │       └── options.go          # Domain-specific options
 ├── internal/                   # Internal packages
 │   ├── conv/                   # Shared type-conversion helpers

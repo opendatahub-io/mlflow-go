@@ -1,5 +1,5 @@
 // Package mlflow provides a Go SDK for MLflow.
-// Supports Prompt Registry, Experiment Tracking, and Artifacts.
+// Supports Prompt Registry, Experiment Tracking, Artifacts, and the MCP Registry.
 package mlflow
 
 import (
@@ -11,6 +11,7 @@ import (
 
 	"github.com/opendatahub-io/mlflow-go/internal/transport"
 	"github.com/opendatahub-io/mlflow-go/mlflow/artifacts"
+	"github.com/opendatahub-io/mlflow-go/mlflow/mcpregistry"
 	"github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
 	"github.com/opendatahub-io/mlflow-go/mlflow/tracking"
 )
@@ -29,6 +30,9 @@ type Client struct {
 
 	artifactsOnce sync.Once
 	artifacts     *artifacts.Client
+
+	mcpRegistryOnce sync.Once
+	mcpRegistry     *mcpregistry.Client
 }
 
 // NewClient creates a new MLflow client with the given options.
@@ -131,4 +135,13 @@ func (c *Client) Artifacts() *artifacts.Client {
 		c.artifacts = artifacts.NewClient(c.transport)
 	})
 	return c.artifacts
+}
+
+// MCPRegistry returns the MCP Registry client for managing Model Context
+// Protocol servers. The sub-client is created lazily on first access.
+func (c *Client) MCPRegistry() *mcpregistry.Client {
+	c.mcpRegistryOnce.Do(func() {
+		c.mcpRegistry = mcpregistry.NewClient(c.transport)
+	})
+	return c.mcpRegistry
 }

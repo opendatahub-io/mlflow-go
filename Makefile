@@ -371,4 +371,4 @@ run-sample-workspaces:
 run-sample-remote:
 	@test -f .env.local || (echo "ERROR: .env.local not found. Copy .env.local.example and fill in values." && exit 1)
 	@echo "Running sample app against remote MLflow..."
-	@cd sample-app && set -a && . ../.env.local && set +a && MLFLOW_DEMO_NO_CLEANUP=true go run .
+	@cd sample-app && set -a && . ../.env.local && set +a && go run .

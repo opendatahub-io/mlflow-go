@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/opendatahub-io/mlflow-go/mlflow"
+	"github.com/opendatahub-io/mlflow-go/mlflow/mcpregistry"
 	"github.com/opendatahub-io/mlflow-go/mlflow/promptregistry"
 	"github.com/opendatahub-io/mlflow-go/mlflow/tracking"
 )
@@ -33,6 +34,7 @@ func main() {
 
 		runPromptDemo(ctx, client)
 		runTrackingDemo(ctx, client)
+		runMCPRegistryDemo(ctx, client)
 		fmt.Println("\n=== All operations completed successfully! ===")
 	}
 }
@@ -571,6 +573,225 @@ func runTrackingDemo(ctx context.Context, client *mlflow.Client) {
 		fmt.Printf("  Verified: experiment lifecycle_stage is 'deleted'\n")
 	} else {
 		fmt.Println("\n=== 23-24. Skipping cleanup (MLFLOW_DEMO_NO_CLEANUP=true) ===")
+	}
+}
+
+// runMCPRegistryDemo demonstrates the full MCP Server Registry lifecycle:
+// register a server, create a version, manage tags/aliases/access endpoints,
+// update mutable fields, search, and clean up.
+func runMCPRegistryDemo(ctx context.Context, client *mlflow.Client) {
+	fmt.Println("\n========================================")
+	fmt.Println("  MCP Server Registry")
+	fmt.Println("========================================")
+
+	reg := client.MCPRegistry()
+	serverName := fmt.Sprintf("com.example/bella-dora-mcp-%d", rand.IntN(10000))
+
+	// === Path 25: Create server ===
+	fmt.Println("\n=== 25. CreateMCPServer: Registering a new MCP server ===")
+	server, err := reg.CreateMCPServer(ctx, serverName,
+		mcpregistry.WithServerDescription("Bella & Dora's internal tools server"),
+	)
+	if err != nil {
+		log.Fatalf("Failed to create MCP server: %v", err)
+	}
+	fmt.Printf("  Created %q (status: %s)\n", server.Name, server.Status)
+
+	// === Path 26: Get server ===
+	fmt.Println("\n=== 26. GetMCPServer: Reading the server back ===")
+	server, err = reg.GetMCPServer(ctx, serverName)
+	if err != nil {
+		log.Fatalf("Failed to get MCP server: %v", err)
+	}
+	fmt.Printf("  Description: %s\n", server.Description)
+
+	// === Path 27: Update server ===
+	fmt.Println("\n=== 27. UpdateMCPServer: Setting a display name ===")
+	server, err = reg.UpdateMCPServer(ctx, serverName,
+		mcpregistry.WithUpdatedServerDisplayName("Bella & Dora MCP Tools"),
+	)
+	if err != nil {
+		log.Fatalf("Failed to update MCP server: %v", err)
+	}
+	fmt.Printf("  Display name: %s\n", server.DisplayName)
+
+	// === Path 28: Set server tag ===
+	fmt.Println("\n=== 28. SetMCPServerTag ===")
+	if err = reg.SetMCPServerTag(ctx, serverName, "team", "ml-platform"); err != nil {
+		log.Fatalf("Failed to set MCP server tag: %v", err)
+	}
+	fmt.Printf("  Set tag team=ml-platform\n")
+
+	// === Path 29: Create server version ===
+	fmt.Println("\n=== 29. CreateMCPServerVersion: Adding version 1.0.0 ===")
+	serverJSON := map[string]any{
+		"name":    serverName,
+		"version": "1.0.0",
+		"packages": []map[string]any{
+			{
+				"registryType": "npm",
+				"identifier":   "@example/bella-dora-mcp-server",
+				"version":      "1.0.0",
+				"transport":    map[string]any{"type": "stdio"},
+			},
+		},
+	}
+	// The npm package above is fictional, so MLflow's server-side auto-discovery
+	// (which fetches and introspects the real package over the MCP protocol) has
+	// nothing to find. Pass mock tools explicitly instead of relying on discovery.
+	mockTools := []mcpregistry.MCPTool{
+		{
+			Name:        "list_walks",
+			Title:       "List Walks",
+			Description: "List recent walks logged for Bella and Dora.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"dog":   map[string]any{"type": "string", "description": "Dog name (bella or dora)"},
+					"limit": map[string]any{"type": "integer", "default": 10},
+				},
+			},
+		},
+		{
+			Name:        "log_walk",
+			Title:       "Log Walk",
+			Description: "Record a new walk for a dog.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"dog":          map[string]any{"type": "string"},
+					"duration_min": map[string]any{"type": "integer"},
+				},
+				"required": []string{"dog", "duration_min"},
+			},
+		},
+	}
+
+	version, err := reg.CreateMCPServerVersion(ctx, serverName, serverJSON,
+		mcpregistry.WithVersionStatus(mcpregistry.MCPServerVersionStatusActive),
+		mcpregistry.WithVersionTools(mockTools),
+		mcpregistry.WithVersionConnectOptions(map[string]mcpregistry.ConnectOptionSettings{
+			"npm": {Hidden: false},
+		}),
+	)
+	if err != nil {
+		log.Fatalf("Failed to create MCP server version: %v", err)
+	}
+	fmt.Printf("  Created v%s (status: %s, %d tool(s) discovered)\n",
+		version.Version, version.Status, len(version.Tools))
+
+	// === Path 30: Get server version ===
+	fmt.Println("\n=== 30. GetMCPServerVersion: Reading the version back ===")
+	version, err = reg.GetMCPServerVersion(ctx, serverName, version.Version)
+	if err != nil {
+		log.Fatalf("Failed to get MCP server version: %v", err)
+	}
+	fmt.Printf("  connect_options[npm].Hidden = %v\n", version.ConnectOptions["npm"].Hidden)
+
+	// === Path 31: Set version tag ===
+	fmt.Println("\n=== 31. SetMCPServerVersionTag ===")
+	if err = reg.SetMCPServerVersionTag(ctx, serverName, version.Version, "stage", "prod"); err != nil {
+		log.Fatalf("Failed to set MCP server version tag: %v", err)
+	}
+	fmt.Printf("  Set tag stage=prod on v%s\n", version.Version)
+
+	// === Path 32: Set alias ===
+	fmt.Println("\n=== 32. SetMCPServerAlias: Pointing 'production' at v1.0.0 ===")
+	if err = reg.SetMCPServerAlias(ctx, serverName, "production", version.Version); err != nil {
+		log.Fatalf("Failed to set MCP server alias: %v", err)
+	}
+	resolved, err := reg.GetMCPServerVersionByAlias(ctx, serverName, "production")
+	if err != nil {
+		log.Fatalf("Failed to resolve MCP server alias: %v", err)
+	}
+	fmt.Printf("  Alias 'production' resolves to v%s\n", resolved.Version)
+
+	// === Path 33: Create access endpoint (pinned to alias) ===
+	fmt.Println("\n=== 33. CreateMCPAccessEndpoint: Binding a URL to the alias ===")
+	endpoint, err := reg.CreateMCPAccessEndpoint(ctx, serverName, "https://mcp.example.com/bella-dora",
+		mcpregistry.WithAccessEndpointServerAlias("production"),
+	)
+	if err != nil {
+		log.Fatalf("Failed to create MCP access endpoint: %v", err)
+	}
+	fmt.Printf("  Created endpoint %s -> %s (alias: %s)\n", endpoint.ID, endpoint.EndpointURL, endpoint.ServerAlias)
+
+	// === Path 34: Get access endpoint ===
+	fmt.Println("\n=== 34. GetMCPAccessEndpoint: Reading the endpoint back ===")
+	endpoint, err = reg.GetMCPAccessEndpoint(ctx, serverName, endpoint.ID)
+	if err != nil {
+		log.Fatalf("Failed to get MCP access endpoint: %v", err)
+	}
+	fmt.Printf("  Transport type: %s\n", endpoint.TransportType)
+
+	// === Path 35: Update access endpoint ===
+	fmt.Println("\n=== 35. UpdateMCPAccessEndpoint: Switching transport to SSE ===")
+	endpoint, err = reg.UpdateMCPAccessEndpoint(ctx, serverName, endpoint.ID,
+		mcpregistry.WithUpdatedEndpointTransportType(mcpregistry.MCPTransportSSE),
+	)
+	if err != nil {
+		log.Fatalf("Failed to update MCP access endpoint: %v", err)
+	}
+	fmt.Printf("  Transport type: %s\n", endpoint.TransportType)
+
+	// === Path 36: Update server version (status transition + tool list change) ===
+	fmt.Println("\n=== 36. UpdateMCPServerVersion: Deprecating v1.0.0 and adding a tool ===")
+	version, err = reg.UpdateMCPServerVersion(ctx, serverName, version.Version,
+		mcpregistry.WithUpdatedVersionStatus(mcpregistry.MCPServerVersionStatusDeprecated),
+		mcpregistry.WithUpdatedVersionTools(append(mockTools, mcpregistry.MCPTool{
+			Name:        "delete_walk",
+			Description: "Delete a previously logged walk.",
+		})),
+	)
+	if err != nil {
+		log.Fatalf("Failed to update MCP server version: %v", err)
+	}
+	fmt.Printf("  Status: %s, tool count: %d\n", version.Status, len(version.Tools))
+
+	// === Path 37: Search servers/versions/endpoints ===
+	fmt.Println("\n=== 37. Search: Servers, versions, and access endpoints ===")
+	servers, err := reg.SearchMCPServers(ctx, mcpregistry.WithServersFilter(fmt.Sprintf("name = '%s'", serverName)))
+	if err != nil {
+		log.Fatalf("Failed to search MCP servers: %v", err)
+	}
+	fmt.Printf("  Found %d server(s) matching filter\n", len(servers.Servers))
+
+	versions, err := reg.SearchMCPServerVersions(ctx, serverName)
+	if err != nil {
+		log.Fatalf("Failed to search MCP server versions: %v", err)
+	}
+	fmt.Printf("  Found %d version(s)\n", len(versions.Versions))
+
+	endpoints, err := reg.SearchMCPAccessEndpoints(ctx, mcpregistry.WithAccessEndpointsServerName(serverName))
+	if err != nil {
+		log.Fatalf("Failed to search MCP access endpoints: %v", err)
+	}
+	fmt.Printf("  Found %d access endpoint(s)\n", len(endpoints.Endpoints))
+
+	if os.Getenv("MLFLOW_DEMO_NO_CLEANUP") != "true" {
+		// === Path 38: Cleanup ===
+		fmt.Println("\n=== 38. Cleanup: Deleting endpoint, alias, tags, version, and server ===")
+		if err = reg.DeleteMCPAccessEndpoint(ctx, serverName, endpoint.ID); err != nil {
+			log.Fatalf("Failed to delete MCP access endpoint: %v", err)
+		}
+		if err = reg.DeleteMCPServerAlias(ctx, serverName, "production"); err != nil {
+			log.Fatalf("Failed to delete MCP server alias: %v", err)
+		}
+		if err = reg.DeleteMCPServerVersionTag(ctx, serverName, version.Version, "stage"); err != nil {
+			log.Fatalf("Failed to delete MCP server version tag: %v", err)
+		}
+		if err = reg.DeleteMCPServerVersion(ctx, serverName, version.Version); err != nil {
+			log.Fatalf("Failed to delete MCP server version: %v", err)
+		}
+		if err = reg.DeleteMCPServerTag(ctx, serverName, "team"); err != nil {
+			log.Fatalf("Failed to delete MCP server tag: %v", err)
+		}
+		if err = reg.DeleteMCPServer(ctx, serverName); err != nil {
+			log.Fatalf("Failed to delete MCP server: %v", err)
+		}
+		fmt.Printf("  Deleted %q and all its child resources\n", serverName)
+	} else {
+		fmt.Println("\n=== 38. Skipping cleanup (MLFLOW_DEMO_NO_CLEANUP=true) ===")
 	}
 }
 

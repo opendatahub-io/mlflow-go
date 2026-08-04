@@ -89,6 +89,73 @@ func TestClient_Post_Success(t *testing.T) {
 	}
 }
 
+func TestClient_Patch_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Errorf("expected PATCH, got %s", r.Method)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
+		}
+
+		var body map[string]string
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["status"] != "active" {
+			t.Errorf("expected body.status=active, got %s", body["status"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "active"})
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	var result map[string]string
+	body := map[string]string{"status": "active"}
+	err = client.Patch(context.Background(), "/api/update", body, &result)
+	if err != nil {
+		t.Fatalf("Patch() error = %v", err)
+	}
+
+	if result["status"] != "active" {
+		t.Errorf("result = %v, want status=active", result)
+	}
+}
+
+func TestClient_Patch_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error_code": "INVALID_PARAMETER_VALUE",
+			"message":    "Invalid status",
+		})
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	err = client.Patch(context.Background(), "/api/update", map[string]string{"status": "bogus"}, nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	apiErr, ok := err.(*errors.APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusBadRequest)
+	}
+}
+
 func TestClient_Error_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

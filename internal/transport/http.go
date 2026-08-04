@@ -93,6 +93,11 @@ func (c *Client) Delete(ctx context.Context, path string, body, result any) erro
 	return c.do(ctx, http.MethodDelete, path, nil, body, result)
 }
 
+// Patch performs a PATCH request to the specified path with a JSON body.
+func (c *Client) Patch(ctx context.Context, path string, body, result any) error {
+	return c.do(ctx, http.MethodPatch, path, nil, body, result)
+}
+
 // GetBytes performs a GET request and returns the raw response body.
 func (c *Client) GetBytes(ctx context.Context, path string, query url.Values) ([]byte, string, error) {
 	return c.doRaw(ctx, http.MethodGet, path, query, nil, "", false)
