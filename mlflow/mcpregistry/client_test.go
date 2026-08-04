@@ -35,6 +35,43 @@ func TestCreateMCPServer_EmptyName(t *testing.T) {
 	}
 }
 
+// --- requirePathParam / path traversal guard ---
+
+func TestRequirePathParam(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{name: "empty", value: "", wantErr: true},
+		{name: "simple", value: "my-server", wantErr: false},
+		{name: "reverse-domain name with slash is allowed", value: "com.example/my-server", wantErr: false},
+		{name: "dot segment", value: "com.example/./my-server", wantErr: true},
+		{name: "dot-dot segment", value: "com.example/../admin", wantErr: true},
+		{name: "leading dot-dot", value: "../admin", wantErr: true},
+		{name: "bare dot-dot", value: "..", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := requirePathParam("server name", tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("requirePathParam(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCreateMCPServer_PathTraversalRejected(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should not be sent for a name containing a path traversal segment")
+	}))
+
+	_, err := client.CreateMCPServer(context.Background(), "com.example/../admin")
+	if err == nil {
+		t.Error("expected error for name containing a path traversal segment")
+	}
+}
+
 func TestCreateMCPServer_Success(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -264,6 +301,43 @@ func TestCreateMCPServerVersion_EmptyServerJSON(t *testing.T) {
 	}
 }
 
+func TestCreateMCPServerVersion_ServerJSONMissingName(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	_, err := client.CreateMCPServerVersion(context.Background(), "my-server",
+		map[string]any{"version": "1.0.0"},
+	)
+	if err == nil {
+		t.Error("expected error for server JSON missing name")
+	}
+}
+
+func TestCreateMCPServerVersion_ServerJSONNameMismatch(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should not be sent when server JSON name mismatches")
+	}))
+
+	_, err := client.CreateMCPServerVersion(context.Background(), "my-server",
+		map[string]any{"name": "someone-elses-server", "version": "1.0.0"},
+	)
+	if err == nil {
+		t.Error("expected error for server JSON name mismatch")
+	}
+}
+
+func TestCreateMCPServerVersion_ServerJSONMissingVersion(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should not be sent when server JSON is missing a version")
+	}))
+
+	_, err := client.CreateMCPServerVersion(context.Background(), "my-server",
+		map[string]any{"name": "my-server"},
+	)
+	if err == nil {
+		t.Error("expected error for server JSON missing version")
+	}
+}
+
 func TestCreateMCPServerVersion_Success(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -407,6 +481,20 @@ func TestCreateMCPAccessEndpoint_EmptyArgs(t *testing.T) {
 	}
 	if _, err := client.CreateMCPAccessEndpoint(context.Background(), "my-server", ""); err == nil {
 		t.Error("expected error for empty endpoint URL")
+	}
+}
+
+func TestCreateMCPAccessEndpoint_MutuallyExclusivePin(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should not be sent when version and alias are both set")
+	}))
+
+	_, err := client.CreateMCPAccessEndpoint(context.Background(), "my-server", "https://example.com",
+		WithAccessEndpointServerVersion("1.0.0"),
+		WithAccessEndpointServerAlias("production"),
+	)
+	if err == nil {
+		t.Error("expected error for mutually exclusive server version and server alias")
 	}
 }
 
@@ -619,6 +707,20 @@ func TestUpdateMCPAccessEndpoint_EmptyArgs(t *testing.T) {
 	}
 }
 
+func TestUpdateMCPAccessEndpoint_MutuallyExclusivePin(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should not be sent when version and alias are both set")
+	}))
+
+	_, err := client.UpdateMCPAccessEndpoint(context.Background(), "my-server", "42",
+		WithUpdatedEndpointServerVersion("1.0.0"),
+		WithUpdatedEndpointServerAlias("production"),
+	)
+	if err == nil {
+		t.Error("expected error for mutually exclusive server version and server alias")
+	}
+}
+
 func TestUpdateMCPAccessEndpoint_Success(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {
@@ -632,6 +734,9 @@ func TestUpdateMCPAccessEndpoint_Success(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&body)
 		if body["url"] != "https://updated.example.com/mcp" {
 			t.Errorf("unexpected url: %v", body["url"])
+		}
+		if body["transport_type"] != "sse" {
+			t.Errorf("unexpected transport_type: %v", body["transport_type"])
 		}
 		if _, ok := body["server_alias"]; ok {
 			t.Errorf("expected server_alias to be omitted, got %v", body["server_alias"])

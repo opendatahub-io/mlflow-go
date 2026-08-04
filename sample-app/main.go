@@ -585,7 +585,10 @@ func runMCPRegistryDemo(ctx context.Context, client *mlflow.Client) {
 	fmt.Println("========================================")
 
 	reg := client.MCPRegistry()
-	serverName := fmt.Sprintf("com.example/bella-dora-mcp-%d", rand.IntN(10000))
+	// Use a nanosecond timestamp rather than a small random suffix so that
+	// runs kept around via MLFLOW_DEMO_NO_CLEANUP=true don't collide on a
+	// previously created server name.
+	serverName := fmt.Sprintf("com.example/bella-dora-mcp-%d", time.Now().UnixNano())
 
 	// === Path 25: Create server ===
 	fmt.Println("\n=== 25. CreateMCPServer: Registering a new MCP server ===")

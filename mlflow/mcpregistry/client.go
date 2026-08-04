@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/opendatahub-io/mlflow-go/internal/transport"
@@ -29,6 +30,33 @@ type Client struct {
 // This is typically called internally by the root mlflow.Client.
 func NewClient(t *transport.Client) *Client {
 	return &Client{transport: t}
+}
+
+// hasPathTraversalSegment reports whether any "/"-separated segment of value
+// is "." or "..", which could let a caller-supplied identifier escape the
+// intended REST resource path when concatenated into a URL.
+func hasPathTraversalSegment(value string) bool {
+	for _, segment := range strings.Split(value, "/") {
+		if segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// requirePathParam validates that a caller-supplied identifier is non-empty
+// and safe to embed as a REST path segment. MCP server names may legitimately
+// contain "/" (e.g. "com.example/my-server"), so "/" itself is allowed, but a
+// bare "." or ".." segment is rejected so a crafted identifier can't escape
+// the intended resource path.
+func requirePathParam(paramName, value string) error {
+	if value == "" {
+		return fmt.Errorf("mlflow: %s is required", paramName)
+	}
+	if hasPathTraversalSegment(value) {
+		return fmt.Errorf(`mlflow: %s must not contain "." or ".." path segments`, paramName)
+	}
+	return nil
 }
 
 // --- Wire types ---
@@ -369,8 +397,8 @@ func accessEndpointFromWire(b *mcpAccessEndpointWire) *MCPAccessEndpoint {
 
 // CreateMCPServer registers a new MCP server in the registry.
 func (c *Client) CreateMCPServer(ctx context.Context, name string, opts ...CreateMCPServerOption) (*MCPServer, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
 
 	o := &createServerOptions{}
@@ -396,8 +424,8 @@ func (c *Client) CreateMCPServer(ctx context.Context, name string, opts ...Creat
 
 // GetMCPServer retrieves an MCP server by name.
 func (c *Client) GetMCPServer(ctx context.Context, name string) (*MCPServer, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
 
 	var resp mcpServerWire
@@ -453,11 +481,11 @@ func (c *Client) SearchMCPServers(ctx context.Context, opts ...SearchMCPServersO
 
 // SetMCPServerTag sets a tag on an MCP server.
 func (c *Client) SetMCPServerTag(ctx context.Context, name, key, value string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
-	if key == "" {
-		return fmt.Errorf("mlflow: tag key is required")
+	if err := requirePathParam("tag key", key); err != nil {
+		return err
 	}
 
 	req := &setTagRequest{Key: key, Value: value}
@@ -472,11 +500,11 @@ func (c *Client) SetMCPServerTag(ctx context.Context, name, key, value string) e
 
 // DeleteMCPServerTag removes a tag from an MCP server.
 func (c *Client) DeleteMCPServerTag(ctx context.Context, name, key string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
-	if key == "" {
-		return fmt.Errorf("mlflow: tag key is required")
+	if err := requirePathParam("tag key", key); err != nil {
+		return err
 	}
 
 	err := c.transport.Delete(ctx, mcpServersBasePath+"/"+name+"/tags/"+key, nil, nil)
@@ -491,8 +519,8 @@ func (c *Client) DeleteMCPServerTag(ctx context.Context, name, key string) error
 // on an existing MCP server. Only fields configured via the supplied options
 // are modified; omitted fields are left unchanged.
 func (c *Client) UpdateMCPServer(ctx context.Context, name string, opts ...UpdateMCPServerOption) (*MCPServer, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
 
 	o := &updateServerOptions{}
@@ -519,8 +547,8 @@ func (c *Client) UpdateMCPServer(ctx context.Context, name string, opts ...Updat
 // DeleteMCPServer removes an MCP server and all of its versions, access
 // endpoints, aliases, and tags.
 func (c *Client) DeleteMCPServer(ctx context.Context, name string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
 
 	err := c.transport.Delete(ctx, mcpServersBasePath+"/"+name, nil, nil)
@@ -534,14 +562,14 @@ func (c *Client) DeleteMCPServer(ctx context.Context, name string) error {
 // SetMCPServerAlias points an alias (e.g. "production") at a specific
 // version of an MCP server, creating or overwriting the alias.
 func (c *Client) SetMCPServerAlias(ctx context.Context, name, alias, version string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
-	if alias == "" {
-		return fmt.Errorf("mlflow: alias is required")
+	if err := requirePathParam("alias", alias); err != nil {
+		return err
 	}
-	if version == "" {
-		return fmt.Errorf("mlflow: version is required")
+	if err := requirePathParam("version", version); err != nil {
+		return err
 	}
 
 	req := &setAliasRequest{Alias: alias, Version: version}
@@ -557,11 +585,11 @@ func (c *Client) SetMCPServerAlias(ctx context.Context, name, alias, version str
 // GetMCPServerVersionByAlias resolves an alias (e.g. "production") to the
 // MCP server version it currently points to.
 func (c *Client) GetMCPServerVersionByAlias(ctx context.Context, name, alias string) (*MCPServerVersion, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
-	if alias == "" {
-		return nil, fmt.Errorf("mlflow: alias is required")
+	if err := requirePathParam("alias", alias); err != nil {
+		return nil, err
 	}
 
 	var resp mcpServerVersionWire
@@ -576,11 +604,11 @@ func (c *Client) GetMCPServerVersionByAlias(ctx context.Context, name, alias str
 
 // DeleteMCPServerAlias removes an alias from an MCP server.
 func (c *Client) DeleteMCPServerAlias(ctx context.Context, name, alias string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
-	if alias == "" {
-		return fmt.Errorf("mlflow: alias is required")
+	if err := requirePathParam("alias", alias); err != nil {
+		return err
 	}
 
 	err := c.transport.Delete(ctx, mcpServersBasePath+"/"+name+"/aliases/"+alias, nil, nil)
@@ -597,11 +625,21 @@ func (c *Client) DeleteMCPServerAlias(ctx context.Context, name, alias string) e
 // serverJSON must follow the MCP registry server.json schema and must include
 // a "name" matching the server's name and a "version" for the new version.
 func (c *Client) CreateMCPServerVersion(ctx context.Context, name string, serverJSON map[string]any, opts ...CreateMCPServerVersionOption) (*MCPServerVersion, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
 	if len(serverJSON) == 0 {
 		return nil, fmt.Errorf("mlflow: server JSON is required")
+	}
+	serverJSONName, ok := serverJSON["name"].(string)
+	if !ok || serverJSONName == "" {
+		return nil, fmt.Errorf(`mlflow: server JSON "name" is required`)
+	}
+	if serverJSONName != name {
+		return nil, fmt.Errorf("mlflow: server JSON name %q must match server name %q", serverJSONName, name)
+	}
+	if serverJSONVersion, ok := serverJSON["version"].(string); !ok || serverJSONVersion == "" {
+		return nil, fmt.Errorf(`mlflow: server JSON "version" is required`)
 	}
 
 	o := &createServerVersionOptions{status: MCPServerVersionStatusDraft}
@@ -630,11 +668,11 @@ func (c *Client) CreateMCPServerVersion(ctx context.Context, name string, server
 
 // GetMCPServerVersion retrieves a specific version of an MCP server.
 func (c *Client) GetMCPServerVersion(ctx context.Context, name, version string) (*MCPServerVersion, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
-	if version == "" {
-		return nil, fmt.Errorf("mlflow: version is required")
+	if err := requirePathParam("version", version); err != nil {
+		return nil, err
 	}
 
 	var resp mcpServerVersionWire
@@ -652,11 +690,11 @@ func (c *Client) GetMCPServerVersion(ctx context.Context, name, version string) 
 // configured via the supplied options are modified; omitted fields are left
 // unchanged.
 func (c *Client) UpdateMCPServerVersion(ctx context.Context, name, version string, opts ...UpdateMCPServerVersionOption) (*MCPServerVersion, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
-	if version == "" {
-		return nil, fmt.Errorf("mlflow: version is required")
+	if err := requirePathParam("version", version); err != nil {
+		return nil, err
 	}
 
 	o := &updateServerVersionOptions{}
@@ -690,11 +728,11 @@ func (c *Client) UpdateMCPServerVersion(ctx context.Context, name, version strin
 
 // DeleteMCPServerVersion removes a specific version of an MCP server.
 func (c *Client) DeleteMCPServerVersion(ctx context.Context, name, version string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
-	if version == "" {
-		return fmt.Errorf("mlflow: version is required")
+	if err := requirePathParam("version", version); err != nil {
+		return err
 	}
 
 	err := c.transport.Delete(ctx, mcpServersBasePath+"/"+name+"/versions/"+version, nil, nil)
@@ -707,14 +745,14 @@ func (c *Client) DeleteMCPServerVersion(ctx context.Context, name, version strin
 
 // SetMCPServerVersionTag sets a tag on a specific version of an MCP server.
 func (c *Client) SetMCPServerVersionTag(ctx context.Context, name, version, key, value string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
-	if version == "" {
-		return fmt.Errorf("mlflow: version is required")
+	if err := requirePathParam("version", version); err != nil {
+		return err
 	}
-	if key == "" {
-		return fmt.Errorf("mlflow: tag key is required")
+	if err := requirePathParam("tag key", key); err != nil {
+		return err
 	}
 
 	req := &setTagRequest{Key: key, Value: value}
@@ -729,14 +767,14 @@ func (c *Client) SetMCPServerVersionTag(ctx context.Context, name, version, key,
 
 // DeleteMCPServerVersionTag removes a tag from a specific version of an MCP server.
 func (c *Client) DeleteMCPServerVersionTag(ctx context.Context, name, version, key string) error {
-	if name == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return err
 	}
-	if version == "" {
-		return fmt.Errorf("mlflow: version is required")
+	if err := requirePathParam("version", version); err != nil {
+		return err
 	}
-	if key == "" {
-		return fmt.Errorf("mlflow: tag key is required")
+	if err := requirePathParam("tag key", key); err != nil {
+		return err
 	}
 
 	path := mcpServersBasePath + "/" + name + "/versions/" + version + "/tags/" + key
@@ -751,8 +789,8 @@ func (c *Client) DeleteMCPServerVersionTag(ctx context.Context, name, version, k
 
 // SearchMCPServerVersions returns versions for a specific MCP server.
 func (c *Client) SearchMCPServerVersions(ctx context.Context, name string, opts ...SearchMCPServerVersionsOption) (*MCPServerVersionList, error) {
-	if name == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", name); err != nil {
+		return nil, err
 	}
 
 	o := &searchServerVersionsOptions{maxResults: defaultSearchMaxResults}
@@ -799,8 +837,8 @@ func (c *Client) SearchMCPServerVersions(ctx context.Context, name string, opts 
 // CreateMCPAccessEndpoint registers a new access endpoint for an MCP
 // server, optionally pinned to a specific version or alias.
 func (c *Client) CreateMCPAccessEndpoint(ctx context.Context, serverName, endpointURL string, opts ...CreateMCPAccessEndpointOption) (*MCPAccessEndpoint, error) {
-	if serverName == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", serverName); err != nil {
+		return nil, err
 	}
 	if endpointURL == "" {
 		return nil, fmt.Errorf("mlflow: endpoint URL is required")
@@ -809,6 +847,9 @@ func (c *Client) CreateMCPAccessEndpoint(ctx context.Context, serverName, endpoi
 	o := &createAccessEndpointOptions{transportType: MCPTransportStreamableHTTP}
 	for _, opt := range opts {
 		opt(o)
+	}
+	if o.serverVersion != "" && o.serverAlias != "" {
+		return nil, fmt.Errorf("mlflow: server version and server alias are mutually exclusive")
 	}
 
 	req := &createMCPAccessEndpointRequest{
@@ -830,11 +871,11 @@ func (c *Client) CreateMCPAccessEndpoint(ctx context.Context, serverName, endpoi
 
 // GetMCPAccessEndpoint retrieves a single access endpoint by ID.
 func (c *Client) GetMCPAccessEndpoint(ctx context.Context, serverName, endpointID string) (*MCPAccessEndpoint, error) {
-	if serverName == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", serverName); err != nil {
+		return nil, err
 	}
-	if endpointID == "" {
-		return nil, fmt.Errorf("mlflow: endpoint ID is required")
+	if err := requirePathParam("endpoint ID", endpointID); err != nil {
+		return nil, err
 	}
 
 	var resp mcpAccessEndpointWire
@@ -851,16 +892,19 @@ func (c *Client) GetMCPAccessEndpoint(ctx context.Context, serverName, endpointI
 // version/alias pin) on an existing access endpoint. Only fields configured
 // via the supplied options are modified; omitted fields are left unchanged.
 func (c *Client) UpdateMCPAccessEndpoint(ctx context.Context, serverName, endpointID string, opts ...UpdateMCPAccessEndpointOption) (*MCPAccessEndpoint, error) {
-	if serverName == "" {
-		return nil, fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", serverName); err != nil {
+		return nil, err
 	}
-	if endpointID == "" {
-		return nil, fmt.Errorf("mlflow: endpoint ID is required")
+	if err := requirePathParam("endpoint ID", endpointID); err != nil {
+		return nil, err
 	}
 
 	o := &updateAccessEndpointOptions{}
 	for _, opt := range opts {
 		opt(o)
+	}
+	if o.serverVersion != nil && o.serverAlias != nil && *o.serverVersion != "" && *o.serverAlias != "" {
+		return nil, fmt.Errorf("mlflow: server version and server alias are mutually exclusive")
 	}
 
 	req := &updateMCPAccessEndpointRequest{
@@ -894,6 +938,9 @@ func (c *Client) SearchMCPAccessEndpoints(ctx context.Context, opts ...SearchMCP
 
 	if o.maxResults <= 0 {
 		return nil, fmt.Errorf("mlflow: max results must be positive")
+	}
+	if o.serverName != "" && hasPathTraversalSegment(o.serverName) {
+		return nil, fmt.Errorf(`mlflow: server name must not contain "." or ".." path segments`)
 	}
 
 	query := url.Values{"max_results": []string{strconv.Itoa(o.maxResults)}}
@@ -939,11 +986,11 @@ func (c *Client) SearchMCPAccessEndpoints(ctx context.Context, opts ...SearchMCP
 
 // DeleteMCPAccessEndpoint removes an access endpoint from an MCP server.
 func (c *Client) DeleteMCPAccessEndpoint(ctx context.Context, serverName, endpointID string) error {
-	if serverName == "" {
-		return fmt.Errorf("mlflow: server name is required")
+	if err := requirePathParam("server name", serverName); err != nil {
+		return err
 	}
-	if endpointID == "" {
-		return fmt.Errorf("mlflow: endpoint ID is required")
+	if err := requirePathParam("endpoint ID", endpointID); err != nil {
+		return err
 	}
 
 	path := mcpServersBasePath + "/" + serverName + "/endpoints/" + endpointID
