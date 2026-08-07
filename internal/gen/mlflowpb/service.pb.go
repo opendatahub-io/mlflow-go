@@ -12238,6 +12238,7 @@ func (*GetSecretsConfig) Descriptor() ([]byte, []int) {
 	return file_service_proto_rawDescGZIP(), []int{161}
 }
 
+// Workspace metadata returned by workspace APIs.
 type Workspace struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The unique workspace name.
