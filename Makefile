@@ -187,12 +187,12 @@ gen: tools/proto/fetch-protos.sh $(PROTOC_GEN_GO)
 	@echo "Generating Go types..."
 	@which protoc > /dev/null || (echo "Error: protoc not installed. Install via: brew install protobuf" && exit 1)
 	@echo "  Generating stub dependencies..."
-	@mkdir -p internal/gen/assessmentspb internal/gen/datasetspb internal/gen/otelpb
+	@mkdir -p internal/gen/assessmentspb internal/gen/datasetspb
 	PATH=$(LOCALBIN):$$PATH protoc \
 		--proto_path=tools/proto/stubs \
 		--go_out=. \
 		--go_opt=module=github.com/opendatahub-io/mlflow-go \
-		assessments.proto datasets.proto opentelemetry/proto/trace/v1/trace.proto
+		assessments.proto datasets.proto
 	@echo "  Generating MLflow types..."
 	@mkdir -p internal/gen/artifactspb
 	PATH=$(LOCALBIN):$$PATH protoc \
@@ -205,7 +205,7 @@ gen: tools/proto/fetch-protos.sh $(PROTOC_GEN_GO)
 		--go_opt=Mdatabricks.proto=github.com/opendatahub-io/mlflow-go/internal/gen/mlflowpb \
 		--go_opt=Massessments.proto=github.com/opendatahub-io/mlflow-go/internal/gen/assessmentspb \
 		--go_opt=Mdatasets.proto=github.com/opendatahub-io/mlflow-go/internal/gen/datasetspb \
-		--go_opt=Mopentelemetry/proto/trace/v1/trace.proto=github.com/opendatahub-io/mlflow-go/internal/gen/otelpb \
+		--go_opt=Mopentelemetry/proto/trace/v1/trace.proto=go.opentelemetry.io/proto/otlp/trace/v1 \
 		model_registry.proto service.proto databricks.proto
 	@echo "  Generating MLflow artifacts types..."
 	PATH=$(LOCALBIN):$$PATH protoc \
