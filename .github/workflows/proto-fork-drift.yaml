@@ -1,0 +1,105 @@
+name: Proto fork drift
+
+# This repo generates its Go client from protos pinned to an upstream
+# mlflow/mlflow commit (tools/proto/PROTO_VERSION), but the product ships
+# opendatahub-io/mlflow. This job reports when those two have diverged, so the
+# divergence is noticed deliberately rather than discovered at runtime.
+#
+# Deliberately NOT triggered on push or pull_request: the fork's master branch
+# moves independently of this repo, so gating every PR on it would redden
+# unrelated work whenever the fork lands a commit. This is an informational
+# signal on a schedule, not a merge gate.
+#
+# When it reports divergence, the fix is a judgement call, not a mechanical one:
+# either bump tools/proto/PROTO_VERSION to an upstream commit that matches the
+# fork again, or accept the divergence and note why.
+
+on:
+  schedule:
+    # Mondays, 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      fork_ref:
+        description: 'opendatahub-io/mlflow ref to compare against'
+        required: false
+        default: 'master'
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: pinned upstream protos vs opendatahub-io/mlflow
+    runs-on: ubuntu-latest
+    env:
+      FORK_REPO: opendatahub-io/mlflow
+      FORK_REF: ${{ inputs.fork_ref || 'master' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Diff pinned upstream protos against the ODH fork
+        run: |
+          set -euo pipefail
+
+          # shellcheck source=/dev/null
+          source tools/proto/PROTO_VERSION
+          if [ -z "${MLFLOW_COMMIT:-}" ]; then
+            echo "::error::MLFLOW_COMMIT not set in tools/proto/PROTO_VERSION"
+            exit 1
+          fi
+
+          upstream_base="https://raw.githubusercontent.com/mlflow/mlflow/${MLFLOW_COMMIT}/mlflow/protos"
+          fork_base="https://raw.githubusercontent.com/${FORK_REPO}/${FORK_REF}/mlflow/protos"
+
+          # The protos tools/proto/fetch-protos.sh pulls, compared before any of
+          # its post-processing so the report reflects the real upstream delta.
+          protos=(model_registry.proto service.proto mlflow_artifacts.proto)
+
+          mkdir -p upstream fork diffs
+          diverged=0
+
+          {
+            echo "## Proto fork drift"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Pinned upstream | \`mlflow/mlflow@${MLFLOW_COMMIT}\` |"
+            echo "| Fork | \`${FORK_REPO}@${FORK_REF}\` |"
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          for proto in "${protos[@]}"; do
+            curl -sSfL "${upstream_base}/${proto}" -o "upstream/${proto}"
+            curl -sSfL "${fork_base}/${proto}" -o "fork/${proto}"
+
+            if diff -u "upstream/${proto}" "fork/${proto}" > "diffs/${proto}.diff"; then
+              echo "- \`${proto}\`: identical" >> "${GITHUB_STEP_SUMMARY}"
+            else
+              diverged=1
+              lines="$(wc -l < "diffs/${proto}.diff" | tr -d ' ')"
+              echo "- \`${proto}\`: **diverged** (${lines}-line diff)" >> "${GITHUB_STEP_SUMMARY}"
+            fi
+          done
+
+          if [ "${diverged}" -eq 0 ]; then
+            echo "All pinned protos match ${FORK_REPO}@${FORK_REF}."
+            exit 0
+          fi
+
+          {
+            echo
+            echo "<details><summary>Full diff (upstream pin &rarr; fork)</summary>"
+            echo
+            echo '```diff'
+            # The step summary is capped at 1 MiB; truncate generously below it.
+            cat diffs/*.diff | head -c 700000
+            echo
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          cat diffs/*.diff
+          echo "::error::Pinned upstream protos have diverged from ${FORK_REPO}@${FORK_REF}. See the job summary. This does not block PRs; bump tools/proto/PROTO_VERSION or record why the divergence is acceptable."
+          exit 1

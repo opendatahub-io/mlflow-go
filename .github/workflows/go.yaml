@@ -9,6 +9,13 @@ on:
 env:
   MLFLOW_VERSION: "3.9.0"
   MLFLOW_MIDSTREAM_REF: "master"
+  # Pinned protoc. The compiler version is stamped into the header of every
+  # generated *.pb.go (35.1 is emitted as "protoc v7.35.1"), so an unpinned
+  # protoc would make `make gen` output differ between CI and developer
+  # machines. Bumping this requires re-running `make gen` and committing the
+  # regenerated code in the same change.
+  PROTOC_VERSION: "35.1"
+  PROTOC_SHA256: "6930ebf62bd4ea607b98fff052596c6ee564b9835b4ce172c75a3f53ae9d91b7"
 
 jobs:
   lint:
@@ -35,6 +42,45 @@ jobs:
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum || (echo "go.mod/go.sum not tidy. Run 'go mod tidy'" && exit 1)
+
+  gen:
+    name: generated protobuf code is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install protoc
+        run: |
+          set -euo pipefail
+          zip="protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          curl -sSfL -o "${zip}" \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${zip}"
+          echo "${PROTOC_SHA256}  ${zip}" | sha256sum -c -
+          sudo unzip -q -o "${zip}" -d /usr/local
+          rm -f "${zip}"
+          protoc --version
+
+      # Note: this reaches the network. tools/proto/fetch-protos.sh curls the
+      # pinned MLflow protos from raw.githubusercontent.com.
+      - name: Regenerate protobuf code
+        run: make gen
+
+      - name: Verify committed output matches the generator
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Committed generated code does not match 'make gen' output. Run 'make gen' and commit the result."
+            exit 1
+          fi
+          untracked="$(git ls-files --others --exclude-standard)"
+          if [ -n "${untracked}" ]; then
+            echo "::error::'make gen' produced new untracked files. Commit them."
+            echo "${untracked}"
+            exit 1
+          fi
 
   test-unit:
     runs-on: ubuntu-latest
