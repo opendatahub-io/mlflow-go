@@ -1845,7 +1845,11 @@ type Experiment struct {
 	// Creation time
 	CreationTime *int64 `protobuf:"varint,6,opt,name=creation_time,json=creationTime" json:"creation_time,omitempty"`
 	// Tags: Additional metadata key-value pairs.
-	Tags          []*ExperimentTag `protobuf:"bytes,7,rep,name=tags" json:"tags,omitempty"`
+	Tags []*ExperimentTag `protobuf:"bytes,7,rep,name=tags" json:"tags,omitempty"`
+	// Effective trace archival retention after broader-scope and experiment overrides are applied.
+	EffectiveTraceArchivalRetention *string `protobuf:"bytes,8,opt,name=effective_trace_archival_retention,json=effectiveTraceArchivalRetention" json:"effective_trace_archival_retention,omitempty"`
+	// Workspace name of the experiment (Always `default` if workspace is not enabled).
+	Workspace     *string `protobuf:"bytes,9,opt,name=workspace" json:"workspace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1927,6 +1931,20 @@ func (x *Experiment) GetTags() []*ExperimentTag {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *Experiment) GetEffectiveTraceArchivalRetention() string {
+	if x != nil && x.EffectiveTraceArchivalRetention != nil {
+		return *x.EffectiveTraceArchivalRetention
+	}
+	return ""
+}
+
+func (x *Experiment) GetWorkspace() string {
+	if x != nil && x.Workspace != nil {
+		return *x.Workspace
+	}
+	return ""
 }
 
 // DatasetInput. Represents a dataset and input tags.
@@ -8484,10 +8502,11 @@ func (x *RegisterScorer) GetSerializedScorer() string {
 	return ""
 }
 
-// List all scorers for an experiment.
+// List all scorers, optionally scoped to a single experiment.
 type ListScorers struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The experiment ID.
+	// The experiment ID. If empty, returns scorers across all experiments
+	// in the active workspace (used by the admin-UI scorer picker).
 	ExperimentId  *string `protobuf:"bytes,1,opt,name=experiment_id,json=experimentId" json:"experiment_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -12238,6 +12257,61 @@ func (*GetSecretsConfig) Descriptor() ([]byte, []int) {
 	return file_service_proto_rawDescGZIP(), []int{161}
 }
 
+// Trace archival settings accepted by workspace APIs and returned in workspace metadata.
+type TraceArchivalConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional archival repository root override.
+	Location *string `protobuf:"bytes,1,opt,name=location" json:"location,omitempty"`
+	// Optional archival retention override. Format: <int><unit>, for example 30d.
+	Retention     *string `protobuf:"bytes,2,opt,name=retention" json:"retention,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TraceArchivalConfig) Reset() {
+	*x = TraceArchivalConfig{}
+	mi := &file_service_proto_msgTypes[162]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TraceArchivalConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TraceArchivalConfig) ProtoMessage() {}
+
+func (x *TraceArchivalConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_service_proto_msgTypes[162]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TraceArchivalConfig.ProtoReflect.Descriptor instead.
+func (*TraceArchivalConfig) Descriptor() ([]byte, []int) {
+	return file_service_proto_rawDescGZIP(), []int{162}
+}
+
+func (x *TraceArchivalConfig) GetLocation() string {
+	if x != nil && x.Location != nil {
+		return *x.Location
+	}
+	return ""
+}
+
+func (x *TraceArchivalConfig) GetRetention() string {
+	if x != nil && x.Retention != nil {
+		return *x.Retention
+	}
+	return ""
+}
+
 // Workspace metadata returned by workspace APIs.
 type Workspace struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -12247,13 +12321,15 @@ type Workspace struct {
 	Description *string `protobuf:"bytes,2,opt,name=description" json:"description,omitempty"`
 	// Optional default artifact root override for this workspace.
 	DefaultArtifactRoot *string `protobuf:"bytes,3,opt,name=default_artifact_root,json=defaultArtifactRoot" json:"default_artifact_root,omitempty"`
+	// Optional trace archival settings for this workspace.
+	TraceArchivalConfig *TraceArchivalConfig `protobuf:"bytes,4,opt,name=trace_archival_config,json=traceArchivalConfig" json:"trace_archival_config,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Workspace) Reset() {
 	*x = Workspace{}
-	mi := &file_service_proto_msgTypes[162]
+	mi := &file_service_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12265,7 +12341,7 @@ func (x *Workspace) String() string {
 func (*Workspace) ProtoMessage() {}
 
 func (x *Workspace) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[162]
+	mi := &file_service_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12278,7 +12354,7 @@ func (x *Workspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Workspace.ProtoReflect.Descriptor instead.
 func (*Workspace) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{162}
+	return file_service_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *Workspace) GetName() string {
@@ -12302,6 +12378,13 @@ func (x *Workspace) GetDefaultArtifactRoot() string {
 	return ""
 }
 
+func (x *Workspace) GetTraceArchivalConfig() *TraceArchivalConfig {
+	if x != nil {
+		return x.TraceArchivalConfig
+	}
+	return nil
+}
+
 // List workspaces available to the current principal.
 type ListWorkspaces struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -12311,7 +12394,7 @@ type ListWorkspaces struct {
 
 func (x *ListWorkspaces) Reset() {
 	*x = ListWorkspaces{}
-	mi := &file_service_proto_msgTypes[163]
+	mi := &file_service_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12323,7 +12406,7 @@ func (x *ListWorkspaces) String() string {
 func (*ListWorkspaces) ProtoMessage() {}
 
 func (x *ListWorkspaces) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[163]
+	mi := &file_service_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12336,7 +12419,7 @@ func (x *ListWorkspaces) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspaces.ProtoReflect.Descriptor instead.
 func (*ListWorkspaces) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{163}
+	return file_service_proto_rawDescGZIP(), []int{164}
 }
 
 // Create a new workspace.
@@ -12348,13 +12431,15 @@ type CreateWorkspace struct {
 	Description *string `protobuf:"bytes,2,opt,name=description" json:"description,omitempty"`
 	// Optional default artifact root override to apply at creation time.
 	DefaultArtifactRoot *string `protobuf:"bytes,3,opt,name=default_artifact_root,json=defaultArtifactRoot" json:"default_artifact_root,omitempty"`
+	// Optional trace archival settings to apply at creation time.
+	TraceArchivalConfig *TraceArchivalConfig `protobuf:"bytes,4,opt,name=trace_archival_config,json=traceArchivalConfig" json:"trace_archival_config,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CreateWorkspace) Reset() {
 	*x = CreateWorkspace{}
-	mi := &file_service_proto_msgTypes[164]
+	mi := &file_service_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12366,7 +12451,7 @@ func (x *CreateWorkspace) String() string {
 func (*CreateWorkspace) ProtoMessage() {}
 
 func (x *CreateWorkspace) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[164]
+	mi := &file_service_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12379,7 +12464,7 @@ func (x *CreateWorkspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateWorkspace.ProtoReflect.Descriptor instead.
 func (*CreateWorkspace) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{164}
+	return file_service_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *CreateWorkspace) GetName() string {
@@ -12403,6 +12488,13 @@ func (x *CreateWorkspace) GetDefaultArtifactRoot() string {
 	return ""
 }
 
+func (x *CreateWorkspace) GetTraceArchivalConfig() *TraceArchivalConfig {
+	if x != nil {
+		return x.TraceArchivalConfig
+	}
+	return nil
+}
+
 // Retrieve workspace metadata.
 type GetWorkspace struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -12414,7 +12506,7 @@ type GetWorkspace struct {
 
 func (x *GetWorkspace) Reset() {
 	*x = GetWorkspace{}
-	mi := &file_service_proto_msgTypes[165]
+	mi := &file_service_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12426,7 +12518,7 @@ func (x *GetWorkspace) String() string {
 func (*GetWorkspace) ProtoMessage() {}
 
 func (x *GetWorkspace) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[165]
+	mi := &file_service_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12439,7 +12531,7 @@ func (x *GetWorkspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspace.ProtoReflect.Descriptor instead.
 func (*GetWorkspace) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{165}
+	return file_service_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *GetWorkspace) GetWorkspaceName() string {
@@ -12458,13 +12550,15 @@ type UpdateWorkspace struct {
 	Description *string `protobuf:"bytes,2,opt,name=description" json:"description,omitempty"`
 	// Optional default artifact root override update.
 	DefaultArtifactRoot *string `protobuf:"bytes,3,opt,name=default_artifact_root,json=defaultArtifactRoot" json:"default_artifact_root,omitempty"`
+	// Optional trace archival settings update.
+	TraceArchivalConfig *TraceArchivalConfig `protobuf:"bytes,4,opt,name=trace_archival_config,json=traceArchivalConfig" json:"trace_archival_config,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 func (x *UpdateWorkspace) Reset() {
 	*x = UpdateWorkspace{}
-	mi := &file_service_proto_msgTypes[166]
+	mi := &file_service_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12476,7 +12570,7 @@ func (x *UpdateWorkspace) String() string {
 func (*UpdateWorkspace) ProtoMessage() {}
 
 func (x *UpdateWorkspace) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[166]
+	mi := &file_service_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12489,7 +12583,7 @@ func (x *UpdateWorkspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateWorkspace.ProtoReflect.Descriptor instead.
 func (*UpdateWorkspace) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{166}
+	return file_service_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *UpdateWorkspace) GetWorkspaceName() string {
@@ -12513,6 +12607,13 @@ func (x *UpdateWorkspace) GetDefaultArtifactRoot() string {
 	return ""
 }
 
+func (x *UpdateWorkspace) GetTraceArchivalConfig() *TraceArchivalConfig {
+	if x != nil {
+		return x.TraceArchivalConfig
+	}
+	return nil
+}
+
 // Delete a workspace.
 type DeleteWorkspace struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -12524,7 +12625,7 @@ type DeleteWorkspace struct {
 
 func (x *DeleteWorkspace) Reset() {
 	*x = DeleteWorkspace{}
-	mi := &file_service_proto_msgTypes[167]
+	mi := &file_service_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12536,7 +12637,7 @@ func (x *DeleteWorkspace) String() string {
 func (*DeleteWorkspace) ProtoMessage() {}
 
 func (x *DeleteWorkspace) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[167]
+	mi := &file_service_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12549,7 +12650,7 @@ func (x *DeleteWorkspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkspace.ProtoReflect.Descriptor instead.
 func (*DeleteWorkspace) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{167}
+	return file_service_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *DeleteWorkspace) GetWorkspaceName() string {
@@ -12569,7 +12670,7 @@ type CreateExperiment_Response struct {
 
 func (x *CreateExperiment_Response) Reset() {
 	*x = CreateExperiment_Response{}
-	mi := &file_service_proto_msgTypes[168]
+	mi := &file_service_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12581,7 +12682,7 @@ func (x *CreateExperiment_Response) String() string {
 func (*CreateExperiment_Response) ProtoMessage() {}
 
 func (x *CreateExperiment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[168]
+	mi := &file_service_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12617,7 +12718,7 @@ type SearchExperiments_Response struct {
 
 func (x *SearchExperiments_Response) Reset() {
 	*x = SearchExperiments_Response{}
-	mi := &file_service_proto_msgTypes[169]
+	mi := &file_service_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12629,7 +12730,7 @@ func (x *SearchExperiments_Response) String() string {
 func (*SearchExperiments_Response) ProtoMessage() {}
 
 func (x *SearchExperiments_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[169]
+	mi := &file_service_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12669,7 +12770,7 @@ type GetExperiment_Response struct {
 
 func (x *GetExperiment_Response) Reset() {
 	*x = GetExperiment_Response{}
-	mi := &file_service_proto_msgTypes[170]
+	mi := &file_service_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12681,7 +12782,7 @@ func (x *GetExperiment_Response) String() string {
 func (*GetExperiment_Response) ProtoMessage() {}
 
 func (x *GetExperiment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[170]
+	mi := &file_service_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12712,7 +12813,7 @@ type DeleteExperiment_Response struct {
 
 func (x *DeleteExperiment_Response) Reset() {
 	*x = DeleteExperiment_Response{}
-	mi := &file_service_proto_msgTypes[171]
+	mi := &file_service_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12724,7 +12825,7 @@ func (x *DeleteExperiment_Response) String() string {
 func (*DeleteExperiment_Response) ProtoMessage() {}
 
 func (x *DeleteExperiment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[171]
+	mi := &file_service_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12748,7 +12849,7 @@ type RestoreExperiment_Response struct {
 
 func (x *RestoreExperiment_Response) Reset() {
 	*x = RestoreExperiment_Response{}
-	mi := &file_service_proto_msgTypes[172]
+	mi := &file_service_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12760,7 +12861,7 @@ func (x *RestoreExperiment_Response) String() string {
 func (*RestoreExperiment_Response) ProtoMessage() {}
 
 func (x *RestoreExperiment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[172]
+	mi := &file_service_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12784,7 +12885,7 @@ type UpdateExperiment_Response struct {
 
 func (x *UpdateExperiment_Response) Reset() {
 	*x = UpdateExperiment_Response{}
-	mi := &file_service_proto_msgTypes[173]
+	mi := &file_service_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12796,7 +12897,7 @@ func (x *UpdateExperiment_Response) String() string {
 func (*UpdateExperiment_Response) ProtoMessage() {}
 
 func (x *UpdateExperiment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[173]
+	mi := &file_service_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12822,7 +12923,7 @@ type CreateRun_Response struct {
 
 func (x *CreateRun_Response) Reset() {
 	*x = CreateRun_Response{}
-	mi := &file_service_proto_msgTypes[174]
+	mi := &file_service_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12834,7 +12935,7 @@ func (x *CreateRun_Response) String() string {
 func (*CreateRun_Response) ProtoMessage() {}
 
 func (x *CreateRun_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[174]
+	mi := &file_service_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12867,7 +12968,7 @@ type UpdateRun_Response struct {
 
 func (x *UpdateRun_Response) Reset() {
 	*x = UpdateRun_Response{}
-	mi := &file_service_proto_msgTypes[175]
+	mi := &file_service_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12879,7 +12980,7 @@ func (x *UpdateRun_Response) String() string {
 func (*UpdateRun_Response) ProtoMessage() {}
 
 func (x *UpdateRun_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[175]
+	mi := &file_service_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12910,7 +13011,7 @@ type DeleteRun_Response struct {
 
 func (x *DeleteRun_Response) Reset() {
 	*x = DeleteRun_Response{}
-	mi := &file_service_proto_msgTypes[176]
+	mi := &file_service_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12922,7 +13023,7 @@ func (x *DeleteRun_Response) String() string {
 func (*DeleteRun_Response) ProtoMessage() {}
 
 func (x *DeleteRun_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[176]
+	mi := &file_service_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12946,7 +13047,7 @@ type RestoreRun_Response struct {
 
 func (x *RestoreRun_Response) Reset() {
 	*x = RestoreRun_Response{}
-	mi := &file_service_proto_msgTypes[177]
+	mi := &file_service_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12958,7 +13059,7 @@ func (x *RestoreRun_Response) String() string {
 func (*RestoreRun_Response) ProtoMessage() {}
 
 func (x *RestoreRun_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[177]
+	mi := &file_service_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12982,7 +13083,7 @@ type LogMetric_Response struct {
 
 func (x *LogMetric_Response) Reset() {
 	*x = LogMetric_Response{}
-	mi := &file_service_proto_msgTypes[178]
+	mi := &file_service_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12994,7 +13095,7 @@ func (x *LogMetric_Response) String() string {
 func (*LogMetric_Response) ProtoMessage() {}
 
 func (x *LogMetric_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[178]
+	mi := &file_service_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13018,7 +13119,7 @@ type LogParam_Response struct {
 
 func (x *LogParam_Response) Reset() {
 	*x = LogParam_Response{}
-	mi := &file_service_proto_msgTypes[179]
+	mi := &file_service_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13030,7 +13131,7 @@ func (x *LogParam_Response) String() string {
 func (*LogParam_Response) ProtoMessage() {}
 
 func (x *LogParam_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[179]
+	mi := &file_service_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13054,7 +13155,7 @@ type SetExperimentTag_Response struct {
 
 func (x *SetExperimentTag_Response) Reset() {
 	*x = SetExperimentTag_Response{}
-	mi := &file_service_proto_msgTypes[180]
+	mi := &file_service_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13066,7 +13167,7 @@ func (x *SetExperimentTag_Response) String() string {
 func (*SetExperimentTag_Response) ProtoMessage() {}
 
 func (x *SetExperimentTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[180]
+	mi := &file_service_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13090,7 +13191,7 @@ type DeleteExperimentTag_Response struct {
 
 func (x *DeleteExperimentTag_Response) Reset() {
 	*x = DeleteExperimentTag_Response{}
-	mi := &file_service_proto_msgTypes[181]
+	mi := &file_service_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13102,7 +13203,7 @@ func (x *DeleteExperimentTag_Response) String() string {
 func (*DeleteExperimentTag_Response) ProtoMessage() {}
 
 func (x *DeleteExperimentTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[181]
+	mi := &file_service_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13126,7 +13227,7 @@ type SetTag_Response struct {
 
 func (x *SetTag_Response) Reset() {
 	*x = SetTag_Response{}
-	mi := &file_service_proto_msgTypes[182]
+	mi := &file_service_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13138,7 +13239,7 @@ func (x *SetTag_Response) String() string {
 func (*SetTag_Response) ProtoMessage() {}
 
 func (x *SetTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[182]
+	mi := &file_service_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13162,7 +13263,7 @@ type DeleteTag_Response struct {
 
 func (x *DeleteTag_Response) Reset() {
 	*x = DeleteTag_Response{}
-	mi := &file_service_proto_msgTypes[183]
+	mi := &file_service_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13174,7 +13275,7 @@ func (x *DeleteTag_Response) String() string {
 func (*DeleteTag_Response) ProtoMessage() {}
 
 func (x *DeleteTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[183]
+	mi := &file_service_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13200,7 +13301,7 @@ type GetRun_Response struct {
 
 func (x *GetRun_Response) Reset() {
 	*x = GetRun_Response{}
-	mi := &file_service_proto_msgTypes[184]
+	mi := &file_service_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13212,7 +13313,7 @@ func (x *GetRun_Response) String() string {
 func (*GetRun_Response) ProtoMessage() {}
 
 func (x *GetRun_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[184]
+	mi := &file_service_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13246,7 +13347,7 @@ type SearchRuns_Response struct {
 
 func (x *SearchRuns_Response) Reset() {
 	*x = SearchRuns_Response{}
-	mi := &file_service_proto_msgTypes[185]
+	mi := &file_service_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13258,7 +13359,7 @@ func (x *SearchRuns_Response) String() string {
 func (*SearchRuns_Response) ProtoMessage() {}
 
 func (x *SearchRuns_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[185]
+	mi := &file_service_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13302,7 +13403,7 @@ type ListArtifacts_Response struct {
 
 func (x *ListArtifacts_Response) Reset() {
 	*x = ListArtifacts_Response{}
-	mi := &file_service_proto_msgTypes[186]
+	mi := &file_service_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13314,7 +13415,7 @@ func (x *ListArtifacts_Response) String() string {
 func (*ListArtifacts_Response) ProtoMessage() {}
 
 func (x *ListArtifacts_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[186]
+	mi := &file_service_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13363,7 +13464,7 @@ type CreatePresignedUploadUrl_Response struct {
 
 func (x *CreatePresignedUploadUrl_Response) Reset() {
 	*x = CreatePresignedUploadUrl_Response{}
-	mi := &file_service_proto_msgTypes[187]
+	mi := &file_service_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13375,7 +13476,7 @@ func (x *CreatePresignedUploadUrl_Response) String() string {
 func (*CreatePresignedUploadUrl_Response) ProtoMessage() {}
 
 func (x *CreatePresignedUploadUrl_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[187]
+	mi := &file_service_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13418,7 +13519,7 @@ type GetMetricHistory_Response struct {
 
 func (x *GetMetricHistory_Response) Reset() {
 	*x = GetMetricHistory_Response{}
-	mi := &file_service_proto_msgTypes[189]
+	mi := &file_service_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13430,7 +13531,7 @@ func (x *GetMetricHistory_Response) String() string {
 func (*GetMetricHistory_Response) ProtoMessage() {}
 
 func (x *GetMetricHistory_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[189]
+	mi := &file_service_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13470,7 +13571,7 @@ type GetMetricHistoryBulkInterval_Response struct {
 
 func (x *GetMetricHistoryBulkInterval_Response) Reset() {
 	*x = GetMetricHistoryBulkInterval_Response{}
-	mi := &file_service_proto_msgTypes[190]
+	mi := &file_service_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13482,7 +13583,7 @@ func (x *GetMetricHistoryBulkInterval_Response) String() string {
 func (*GetMetricHistoryBulkInterval_Response) ProtoMessage() {}
 
 func (x *GetMetricHistoryBulkInterval_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[190]
+	mi := &file_service_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13513,7 +13614,7 @@ type LogBatch_Response struct {
 
 func (x *LogBatch_Response) Reset() {
 	*x = LogBatch_Response{}
-	mi := &file_service_proto_msgTypes[191]
+	mi := &file_service_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13525,7 +13626,7 @@ func (x *LogBatch_Response) String() string {
 func (*LogBatch_Response) ProtoMessage() {}
 
 func (x *LogBatch_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[191]
+	mi := &file_service_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13549,7 +13650,7 @@ type LogModel_Response struct {
 
 func (x *LogModel_Response) Reset() {
 	*x = LogModel_Response{}
-	mi := &file_service_proto_msgTypes[192]
+	mi := &file_service_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13561,7 +13662,7 @@ func (x *LogModel_Response) String() string {
 func (*LogModel_Response) ProtoMessage() {}
 
 func (x *LogModel_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[192]
+	mi := &file_service_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13585,7 +13686,7 @@ type LogInputs_Response struct {
 
 func (x *LogInputs_Response) Reset() {
 	*x = LogInputs_Response{}
-	mi := &file_service_proto_msgTypes[193]
+	mi := &file_service_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13597,7 +13698,7 @@ func (x *LogInputs_Response) String() string {
 func (*LogInputs_Response) ProtoMessage() {}
 
 func (x *LogInputs_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[193]
+	mi := &file_service_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13621,7 +13722,7 @@ type LogOutputs_Response struct {
 
 func (x *LogOutputs_Response) Reset() {
 	*x = LogOutputs_Response{}
-	mi := &file_service_proto_msgTypes[194]
+	mi := &file_service_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13633,7 +13734,7 @@ func (x *LogOutputs_Response) String() string {
 func (*LogOutputs_Response) ProtoMessage() {}
 
 func (x *LogOutputs_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[194]
+	mi := &file_service_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13659,7 +13760,7 @@ type GetExperimentByName_Response struct {
 
 func (x *GetExperimentByName_Response) Reset() {
 	*x = GetExperimentByName_Response{}
-	mi := &file_service_proto_msgTypes[195]
+	mi := &file_service_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13671,7 +13772,7 @@ func (x *GetExperimentByName_Response) String() string {
 func (*GetExperimentByName_Response) ProtoMessage() {}
 
 func (x *GetExperimentByName_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[195]
+	mi := &file_service_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13704,7 +13805,7 @@ type CreateAssessment_Response struct {
 
 func (x *CreateAssessment_Response) Reset() {
 	*x = CreateAssessment_Response{}
-	mi := &file_service_proto_msgTypes[196]
+	mi := &file_service_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13716,7 +13817,7 @@ func (x *CreateAssessment_Response) String() string {
 func (*CreateAssessment_Response) ProtoMessage() {}
 
 func (x *CreateAssessment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[196]
+	mi := &file_service_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13749,7 +13850,7 @@ type UpdateAssessment_Response struct {
 
 func (x *UpdateAssessment_Response) Reset() {
 	*x = UpdateAssessment_Response{}
-	mi := &file_service_proto_msgTypes[197]
+	mi := &file_service_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13761,7 +13862,7 @@ func (x *UpdateAssessment_Response) String() string {
 func (*UpdateAssessment_Response) ProtoMessage() {}
 
 func (x *UpdateAssessment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[197]
+	mi := &file_service_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13792,7 +13893,7 @@ type DeleteAssessment_Response struct {
 
 func (x *DeleteAssessment_Response) Reset() {
 	*x = DeleteAssessment_Response{}
-	mi := &file_service_proto_msgTypes[198]
+	mi := &file_service_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13804,7 +13905,7 @@ func (x *DeleteAssessment_Response) String() string {
 func (*DeleteAssessment_Response) ProtoMessage() {}
 
 func (x *DeleteAssessment_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[198]
+	mi := &file_service_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13830,7 +13931,7 @@ type GetAssessmentRequest_Response struct {
 
 func (x *GetAssessmentRequest_Response) Reset() {
 	*x = GetAssessmentRequest_Response{}
-	mi := &file_service_proto_msgTypes[199]
+	mi := &file_service_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13842,7 +13943,7 @@ func (x *GetAssessmentRequest_Response) String() string {
 func (*GetAssessmentRequest_Response) ProtoMessage() {}
 
 func (x *GetAssessmentRequest_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[199]
+	mi := &file_service_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13875,7 +13976,7 @@ type StartTrace_Response struct {
 
 func (x *StartTrace_Response) Reset() {
 	*x = StartTrace_Response{}
-	mi := &file_service_proto_msgTypes[200]
+	mi := &file_service_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13887,7 +13988,7 @@ func (x *StartTrace_Response) String() string {
 func (*StartTrace_Response) ProtoMessage() {}
 
 func (x *StartTrace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[200]
+	mi := &file_service_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13920,7 +14021,7 @@ type EndTrace_Response struct {
 
 func (x *EndTrace_Response) Reset() {
 	*x = EndTrace_Response{}
-	mi := &file_service_proto_msgTypes[201]
+	mi := &file_service_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13932,7 +14033,7 @@ func (x *EndTrace_Response) String() string {
 func (*EndTrace_Response) ProtoMessage() {}
 
 func (x *EndTrace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[201]
+	mi := &file_service_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13965,7 +14066,7 @@ type GetTraceInfo_Response struct {
 
 func (x *GetTraceInfo_Response) Reset() {
 	*x = GetTraceInfo_Response{}
-	mi := &file_service_proto_msgTypes[202]
+	mi := &file_service_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13977,7 +14078,7 @@ func (x *GetTraceInfo_Response) String() string {
 func (*GetTraceInfo_Response) ProtoMessage() {}
 
 func (x *GetTraceInfo_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[202]
+	mi := &file_service_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14009,7 +14110,7 @@ type GetTraceInfoV3_Response struct {
 
 func (x *GetTraceInfoV3_Response) Reset() {
 	*x = GetTraceInfoV3_Response{}
-	mi := &file_service_proto_msgTypes[203]
+	mi := &file_service_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14021,7 +14122,7 @@ func (x *GetTraceInfoV3_Response) String() string {
 func (*GetTraceInfoV3_Response) ProtoMessage() {}
 
 func (x *GetTraceInfoV3_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[203]
+	mi := &file_service_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14054,7 +14155,7 @@ type BatchGetTraces_Response struct {
 
 func (x *BatchGetTraces_Response) Reset() {
 	*x = BatchGetTraces_Response{}
-	mi := &file_service_proto_msgTypes[204]
+	mi := &file_service_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14066,7 +14167,7 @@ func (x *BatchGetTraces_Response) String() string {
 func (*BatchGetTraces_Response) ProtoMessage() {}
 
 func (x *BatchGetTraces_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[204]
+	mi := &file_service_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14099,7 +14200,7 @@ type BatchGetTraceInfos_Response struct {
 
 func (x *BatchGetTraceInfos_Response) Reset() {
 	*x = BatchGetTraceInfos_Response{}
-	mi := &file_service_proto_msgTypes[205]
+	mi := &file_service_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14111,7 +14212,7 @@ func (x *BatchGetTraceInfos_Response) String() string {
 func (*BatchGetTraceInfos_Response) ProtoMessage() {}
 
 func (x *BatchGetTraceInfos_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[205]
+	mi := &file_service_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14144,7 +14245,7 @@ type GetTrace_Response struct {
 
 func (x *GetTrace_Response) Reset() {
 	*x = GetTrace_Response{}
-	mi := &file_service_proto_msgTypes[206]
+	mi := &file_service_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14156,7 +14257,7 @@ func (x *GetTrace_Response) String() string {
 func (*GetTrace_Response) ProtoMessage() {}
 
 func (x *GetTrace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[206]
+	mi := &file_service_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14190,7 +14291,7 @@ type SearchTraces_Response struct {
 
 func (x *SearchTraces_Response) Reset() {
 	*x = SearchTraces_Response{}
-	mi := &file_service_proto_msgTypes[207]
+	mi := &file_service_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14202,7 +14303,7 @@ func (x *SearchTraces_Response) String() string {
 func (*SearchTraces_Response) ProtoMessage() {}
 
 func (x *SearchTraces_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[207]
+	mi := &file_service_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14243,7 +14344,7 @@ type SearchUnifiedTraces_Response struct {
 
 func (x *SearchUnifiedTraces_Response) Reset() {
 	*x = SearchUnifiedTraces_Response{}
-	mi := &file_service_proto_msgTypes[208]
+	mi := &file_service_proto_msgTypes[209]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14255,7 +14356,7 @@ func (x *SearchUnifiedTraces_Response) String() string {
 func (*SearchUnifiedTraces_Response) ProtoMessage() {}
 
 func (x *SearchUnifiedTraces_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[208]
+	mi := &file_service_proto_msgTypes[209]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14296,7 +14397,7 @@ type GetOnlineTraceDetails_Response struct {
 
 func (x *GetOnlineTraceDetails_Response) Reset() {
 	*x = GetOnlineTraceDetails_Response{}
-	mi := &file_service_proto_msgTypes[209]
+	mi := &file_service_proto_msgTypes[210]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14308,7 +14409,7 @@ func (x *GetOnlineTraceDetails_Response) String() string {
 func (*GetOnlineTraceDetails_Response) ProtoMessage() {}
 
 func (x *GetOnlineTraceDetails_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[209]
+	mi := &file_service_proto_msgTypes[210]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14340,7 +14441,7 @@ type DeleteTraces_Response struct {
 
 func (x *DeleteTraces_Response) Reset() {
 	*x = DeleteTraces_Response{}
-	mi := &file_service_proto_msgTypes[210]
+	mi := &file_service_proto_msgTypes[211]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14352,7 +14453,7 @@ func (x *DeleteTraces_Response) String() string {
 func (*DeleteTraces_Response) ProtoMessage() {}
 
 func (x *DeleteTraces_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[210]
+	mi := &file_service_proto_msgTypes[211]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14384,7 +14485,7 @@ type DeleteTracesV3_Response struct {
 
 func (x *DeleteTracesV3_Response) Reset() {
 	*x = DeleteTracesV3_Response{}
-	mi := &file_service_proto_msgTypes[211]
+	mi := &file_service_proto_msgTypes[212]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14396,7 +14497,7 @@ func (x *DeleteTracesV3_Response) String() string {
 func (*DeleteTracesV3_Response) ProtoMessage() {}
 
 func (x *DeleteTracesV3_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[211]
+	mi := &file_service_proto_msgTypes[212]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14439,7 +14540,7 @@ type CalculateTraceFilterCorrelation_Response struct {
 
 func (x *CalculateTraceFilterCorrelation_Response) Reset() {
 	*x = CalculateTraceFilterCorrelation_Response{}
-	mi := &file_service_proto_msgTypes[212]
+	mi := &file_service_proto_msgTypes[213]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14451,7 +14552,7 @@ func (x *CalculateTraceFilterCorrelation_Response) String() string {
 func (*CalculateTraceFilterCorrelation_Response) ProtoMessage() {}
 
 func (x *CalculateTraceFilterCorrelation_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[212]
+	mi := &file_service_proto_msgTypes[213]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14522,7 +14623,7 @@ type QueryTraceMetrics_Response struct {
 
 func (x *QueryTraceMetrics_Response) Reset() {
 	*x = QueryTraceMetrics_Response{}
-	mi := &file_service_proto_msgTypes[213]
+	mi := &file_service_proto_msgTypes[214]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14534,7 +14635,7 @@ func (x *QueryTraceMetrics_Response) String() string {
 func (*QueryTraceMetrics_Response) ProtoMessage() {}
 
 func (x *QueryTraceMetrics_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[213]
+	mi := &file_service_proto_msgTypes[214]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14572,7 +14673,7 @@ type SetTraceTag_Response struct {
 
 func (x *SetTraceTag_Response) Reset() {
 	*x = SetTraceTag_Response{}
-	mi := &file_service_proto_msgTypes[216]
+	mi := &file_service_proto_msgTypes[217]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14584,7 +14685,7 @@ func (x *SetTraceTag_Response) String() string {
 func (*SetTraceTag_Response) ProtoMessage() {}
 
 func (x *SetTraceTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[216]
+	mi := &file_service_proto_msgTypes[217]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14608,7 +14709,7 @@ type SetTraceTagV3_Response struct {
 
 func (x *SetTraceTagV3_Response) Reset() {
 	*x = SetTraceTagV3_Response{}
-	mi := &file_service_proto_msgTypes[217]
+	mi := &file_service_proto_msgTypes[218]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14620,7 +14721,7 @@ func (x *SetTraceTagV3_Response) String() string {
 func (*SetTraceTagV3_Response) ProtoMessage() {}
 
 func (x *SetTraceTagV3_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[217]
+	mi := &file_service_proto_msgTypes[218]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14644,7 +14745,7 @@ type DeleteTraceTag_Response struct {
 
 func (x *DeleteTraceTag_Response) Reset() {
 	*x = DeleteTraceTag_Response{}
-	mi := &file_service_proto_msgTypes[218]
+	mi := &file_service_proto_msgTypes[219]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14656,7 +14757,7 @@ func (x *DeleteTraceTag_Response) String() string {
 func (*DeleteTraceTag_Response) ProtoMessage() {}
 
 func (x *DeleteTraceTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[218]
+	mi := &file_service_proto_msgTypes[219]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14680,7 +14781,7 @@ type DeleteTraceTagV3_Response struct {
 
 func (x *DeleteTraceTagV3_Response) Reset() {
 	*x = DeleteTraceTagV3_Response{}
-	mi := &file_service_proto_msgTypes[219]
+	mi := &file_service_proto_msgTypes[220]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14692,7 +14793,7 @@ func (x *DeleteTraceTagV3_Response) String() string {
 func (*DeleteTraceTagV3_Response) ProtoMessage() {}
 
 func (x *DeleteTraceTagV3_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[219]
+	mi := &file_service_proto_msgTypes[220]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14718,7 +14819,7 @@ type TraceLocation_MlflowExperimentLocation struct {
 
 func (x *TraceLocation_MlflowExperimentLocation) Reset() {
 	*x = TraceLocation_MlflowExperimentLocation{}
-	mi := &file_service_proto_msgTypes[220]
+	mi := &file_service_proto_msgTypes[221]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14730,7 +14831,7 @@ func (x *TraceLocation_MlflowExperimentLocation) String() string {
 func (*TraceLocation_MlflowExperimentLocation) ProtoMessage() {}
 
 func (x *TraceLocation_MlflowExperimentLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[220]
+	mi := &file_service_proto_msgTypes[221]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14763,7 +14864,7 @@ type TraceLocation_InferenceTableLocation struct {
 
 func (x *TraceLocation_InferenceTableLocation) Reset() {
 	*x = TraceLocation_InferenceTableLocation{}
-	mi := &file_service_proto_msgTypes[221]
+	mi := &file_service_proto_msgTypes[222]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14775,7 +14876,7 @@ func (x *TraceLocation_InferenceTableLocation) String() string {
 func (*TraceLocation_InferenceTableLocation) ProtoMessage() {}
 
 func (x *TraceLocation_InferenceTableLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[221]
+	mi := &file_service_proto_msgTypes[222]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14808,7 +14909,7 @@ type StartTraceV3_Response struct {
 
 func (x *StartTraceV3_Response) Reset() {
 	*x = StartTraceV3_Response{}
-	mi := &file_service_proto_msgTypes[224]
+	mi := &file_service_proto_msgTypes[225]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14820,7 +14921,7 @@ func (x *StartTraceV3_Response) String() string {
 func (*StartTraceV3_Response) ProtoMessage() {}
 
 func (x *StartTraceV3_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[224]
+	mi := &file_service_proto_msgTypes[225]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14851,7 +14952,7 @@ type LinkTracesToRun_Response struct {
 
 func (x *LinkTracesToRun_Response) Reset() {
 	*x = LinkTracesToRun_Response{}
-	mi := &file_service_proto_msgTypes[225]
+	mi := &file_service_proto_msgTypes[226]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14863,7 +14964,7 @@ func (x *LinkTracesToRun_Response) String() string {
 func (*LinkTracesToRun_Response) ProtoMessage() {}
 
 func (x *LinkTracesToRun_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[225]
+	mi := &file_service_proto_msgTypes[226]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14891,7 +14992,7 @@ type LinkPromptsToTrace_PromptVersionRef struct {
 
 func (x *LinkPromptsToTrace_PromptVersionRef) Reset() {
 	*x = LinkPromptsToTrace_PromptVersionRef{}
-	mi := &file_service_proto_msgTypes[226]
+	mi := &file_service_proto_msgTypes[227]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14903,7 +15004,7 @@ func (x *LinkPromptsToTrace_PromptVersionRef) String() string {
 func (*LinkPromptsToTrace_PromptVersionRef) ProtoMessage() {}
 
 func (x *LinkPromptsToTrace_PromptVersionRef) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[226]
+	mi := &file_service_proto_msgTypes[227]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14941,7 +15042,7 @@ type LinkPromptsToTrace_Response struct {
 
 func (x *LinkPromptsToTrace_Response) Reset() {
 	*x = LinkPromptsToTrace_Response{}
-	mi := &file_service_proto_msgTypes[227]
+	mi := &file_service_proto_msgTypes[228]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14953,7 +15054,7 @@ func (x *LinkPromptsToTrace_Response) String() string {
 func (*LinkPromptsToTrace_Response) ProtoMessage() {}
 
 func (x *LinkPromptsToTrace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[227]
+	mi := &file_service_proto_msgTypes[228]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14979,7 +15080,7 @@ type SearchDatasets_Response struct {
 
 func (x *SearchDatasets_Response) Reset() {
 	*x = SearchDatasets_Response{}
-	mi := &file_service_proto_msgTypes[228]
+	mi := &file_service_proto_msgTypes[229]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14991,7 +15092,7 @@ func (x *SearchDatasets_Response) String() string {
 func (*SearchDatasets_Response) ProtoMessage() {}
 
 func (x *SearchDatasets_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[228]
+	mi := &file_service_proto_msgTypes[229]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15024,7 +15125,7 @@ type CreateLoggedModel_Response struct {
 
 func (x *CreateLoggedModel_Response) Reset() {
 	*x = CreateLoggedModel_Response{}
-	mi := &file_service_proto_msgTypes[229]
+	mi := &file_service_proto_msgTypes[230]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15036,7 +15137,7 @@ func (x *CreateLoggedModel_Response) String() string {
 func (*CreateLoggedModel_Response) ProtoMessage() {}
 
 func (x *CreateLoggedModel_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[229]
+	mi := &file_service_proto_msgTypes[230]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15069,7 +15170,7 @@ type FinalizeLoggedModel_Response struct {
 
 func (x *FinalizeLoggedModel_Response) Reset() {
 	*x = FinalizeLoggedModel_Response{}
-	mi := &file_service_proto_msgTypes[230]
+	mi := &file_service_proto_msgTypes[231]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15081,7 +15182,7 @@ func (x *FinalizeLoggedModel_Response) String() string {
 func (*FinalizeLoggedModel_Response) ProtoMessage() {}
 
 func (x *FinalizeLoggedModel_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[230]
+	mi := &file_service_proto_msgTypes[231]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15114,7 +15215,7 @@ type GetLoggedModel_Response struct {
 
 func (x *GetLoggedModel_Response) Reset() {
 	*x = GetLoggedModel_Response{}
-	mi := &file_service_proto_msgTypes[231]
+	mi := &file_service_proto_msgTypes[232]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15126,7 +15227,7 @@ func (x *GetLoggedModel_Response) String() string {
 func (*GetLoggedModel_Response) ProtoMessage() {}
 
 func (x *GetLoggedModel_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[231]
+	mi := &file_service_proto_msgTypes[232]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15157,7 +15258,7 @@ type DeleteLoggedModel_Response struct {
 
 func (x *DeleteLoggedModel_Response) Reset() {
 	*x = DeleteLoggedModel_Response{}
-	mi := &file_service_proto_msgTypes[232]
+	mi := &file_service_proto_msgTypes[233]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15169,7 +15270,7 @@ func (x *DeleteLoggedModel_Response) String() string {
 func (*DeleteLoggedModel_Response) ProtoMessage() {}
 
 func (x *DeleteLoggedModel_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[232]
+	mi := &file_service_proto_msgTypes[233]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15197,7 +15298,7 @@ type SearchLoggedModels_Dataset struct {
 
 func (x *SearchLoggedModels_Dataset) Reset() {
 	*x = SearchLoggedModels_Dataset{}
-	mi := &file_service_proto_msgTypes[233]
+	mi := &file_service_proto_msgTypes[234]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15209,7 +15310,7 @@ func (x *SearchLoggedModels_Dataset) String() string {
 func (*SearchLoggedModels_Dataset) ProtoMessage() {}
 
 func (x *SearchLoggedModels_Dataset) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[233]
+	mi := &file_service_proto_msgTypes[234]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15265,7 +15366,7 @@ const (
 
 func (x *SearchLoggedModels_OrderBy) Reset() {
 	*x = SearchLoggedModels_OrderBy{}
-	mi := &file_service_proto_msgTypes[234]
+	mi := &file_service_proto_msgTypes[235]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15277,7 +15378,7 @@ func (x *SearchLoggedModels_OrderBy) String() string {
 func (*SearchLoggedModels_OrderBy) ProtoMessage() {}
 
 func (x *SearchLoggedModels_OrderBy) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[234]
+	mi := &file_service_proto_msgTypes[235]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15333,7 +15434,7 @@ type SearchLoggedModels_Response struct {
 
 func (x *SearchLoggedModels_Response) Reset() {
 	*x = SearchLoggedModels_Response{}
-	mi := &file_service_proto_msgTypes[235]
+	mi := &file_service_proto_msgTypes[236]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15345,7 +15446,7 @@ func (x *SearchLoggedModels_Response) String() string {
 func (*SearchLoggedModels_Response) ProtoMessage() {}
 
 func (x *SearchLoggedModels_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[235]
+	mi := &file_service_proto_msgTypes[236]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15385,7 +15486,7 @@ type SetLoggedModelTags_Response struct {
 
 func (x *SetLoggedModelTags_Response) Reset() {
 	*x = SetLoggedModelTags_Response{}
-	mi := &file_service_proto_msgTypes[236]
+	mi := &file_service_proto_msgTypes[237]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15397,7 +15498,7 @@ func (x *SetLoggedModelTags_Response) String() string {
 func (*SetLoggedModelTags_Response) ProtoMessage() {}
 
 func (x *SetLoggedModelTags_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[236]
+	mi := &file_service_proto_msgTypes[237]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15428,7 +15529,7 @@ type DeleteLoggedModelTag_Response struct {
 
 func (x *DeleteLoggedModelTag_Response) Reset() {
 	*x = DeleteLoggedModelTag_Response{}
-	mi := &file_service_proto_msgTypes[237]
+	mi := &file_service_proto_msgTypes[238]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15440,7 +15541,7 @@ func (x *DeleteLoggedModelTag_Response) String() string {
 func (*DeleteLoggedModelTag_Response) ProtoMessage() {}
 
 func (x *DeleteLoggedModelTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[237]
+	mi := &file_service_proto_msgTypes[238]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15470,7 +15571,7 @@ type ListLoggedModelArtifacts_Response struct {
 
 func (x *ListLoggedModelArtifacts_Response) Reset() {
 	*x = ListLoggedModelArtifacts_Response{}
-	mi := &file_service_proto_msgTypes[238]
+	mi := &file_service_proto_msgTypes[239]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15482,7 +15583,7 @@ func (x *ListLoggedModelArtifacts_Response) String() string {
 func (*ListLoggedModelArtifacts_Response) ProtoMessage() {}
 
 func (x *ListLoggedModelArtifacts_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[238]
+	mi := &file_service_proto_msgTypes[239]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15527,7 +15628,7 @@ type LogLoggedModelParamsRequest_Response struct {
 
 func (x *LogLoggedModelParamsRequest_Response) Reset() {
 	*x = LogLoggedModelParamsRequest_Response{}
-	mi := &file_service_proto_msgTypes[239]
+	mi := &file_service_proto_msgTypes[240]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15539,7 +15640,7 @@ func (x *LogLoggedModelParamsRequest_Response) String() string {
 func (*LogLoggedModelParamsRequest_Response) ProtoMessage() {}
 
 func (x *LogLoggedModelParamsRequest_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[239]
+	mi := &file_service_proto_msgTypes[240]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15566,7 +15667,7 @@ type SearchTracesV3_Response struct {
 
 func (x *SearchTracesV3_Response) Reset() {
 	*x = SearchTracesV3_Response{}
-	mi := &file_service_proto_msgTypes[240]
+	mi := &file_service_proto_msgTypes[241]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15578,7 +15679,7 @@ func (x *SearchTracesV3_Response) String() string {
 func (*SearchTracesV3_Response) ProtoMessage() {}
 
 func (x *SearchTracesV3_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[240]
+	mi := &file_service_proto_msgTypes[241]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15618,7 +15719,7 @@ type CreateDataset_Response struct {
 
 func (x *CreateDataset_Response) Reset() {
 	*x = CreateDataset_Response{}
-	mi := &file_service_proto_msgTypes[241]
+	mi := &file_service_proto_msgTypes[242]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15630,7 +15731,7 @@ func (x *CreateDataset_Response) String() string {
 func (*CreateDataset_Response) ProtoMessage() {}
 
 func (x *CreateDataset_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[241]
+	mi := &file_service_proto_msgTypes[242]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15665,7 +15766,7 @@ type GetDataset_Response struct {
 
 func (x *GetDataset_Response) Reset() {
 	*x = GetDataset_Response{}
-	mi := &file_service_proto_msgTypes[242]
+	mi := &file_service_proto_msgTypes[243]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15677,7 +15778,7 @@ func (x *GetDataset_Response) String() string {
 func (*GetDataset_Response) ProtoMessage() {}
 
 func (x *GetDataset_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[242]
+	mi := &file_service_proto_msgTypes[243]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15715,7 +15816,7 @@ type DeleteDataset_Response struct {
 
 func (x *DeleteDataset_Response) Reset() {
 	*x = DeleteDataset_Response{}
-	mi := &file_service_proto_msgTypes[243]
+	mi := &file_service_proto_msgTypes[244]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15727,7 +15828,7 @@ func (x *DeleteDataset_Response) String() string {
 func (*DeleteDataset_Response) ProtoMessage() {}
 
 func (x *DeleteDataset_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[243]
+	mi := &file_service_proto_msgTypes[244]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15755,7 +15856,7 @@ type SearchEvaluationDatasets_Response struct {
 
 func (x *SearchEvaluationDatasets_Response) Reset() {
 	*x = SearchEvaluationDatasets_Response{}
-	mi := &file_service_proto_msgTypes[244]
+	mi := &file_service_proto_msgTypes[245]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15767,7 +15868,7 @@ func (x *SearchEvaluationDatasets_Response) String() string {
 func (*SearchEvaluationDatasets_Response) ProtoMessage() {}
 
 func (x *SearchEvaluationDatasets_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[244]
+	mi := &file_service_proto_msgTypes[245]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15807,7 +15908,7 @@ type SetDatasetTags_Response struct {
 
 func (x *SetDatasetTags_Response) Reset() {
 	*x = SetDatasetTags_Response{}
-	mi := &file_service_proto_msgTypes[245]
+	mi := &file_service_proto_msgTypes[246]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15819,7 +15920,7 @@ func (x *SetDatasetTags_Response) String() string {
 func (*SetDatasetTags_Response) ProtoMessage() {}
 
 func (x *SetDatasetTags_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[245]
+	mi := &file_service_proto_msgTypes[246]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15850,7 +15951,7 @@ type DeleteDatasetTag_Response struct {
 
 func (x *DeleteDatasetTag_Response) Reset() {
 	*x = DeleteDatasetTag_Response{}
-	mi := &file_service_proto_msgTypes[246]
+	mi := &file_service_proto_msgTypes[247]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15862,7 +15963,7 @@ func (x *DeleteDatasetTag_Response) String() string {
 func (*DeleteDatasetTag_Response) ProtoMessage() {}
 
 func (x *DeleteDatasetTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[246]
+	mi := &file_service_proto_msgTypes[247]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15890,7 +15991,7 @@ type UpsertDatasetRecords_Response struct {
 
 func (x *UpsertDatasetRecords_Response) Reset() {
 	*x = UpsertDatasetRecords_Response{}
-	mi := &file_service_proto_msgTypes[247]
+	mi := &file_service_proto_msgTypes[248]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15902,7 +16003,7 @@ func (x *UpsertDatasetRecords_Response) String() string {
 func (*UpsertDatasetRecords_Response) ProtoMessage() {}
 
 func (x *UpsertDatasetRecords_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[247]
+	mi := &file_service_proto_msgTypes[248]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15942,7 +16043,7 @@ type GetDatasetExperimentIds_Response struct {
 
 func (x *GetDatasetExperimentIds_Response) Reset() {
 	*x = GetDatasetExperimentIds_Response{}
-	mi := &file_service_proto_msgTypes[248]
+	mi := &file_service_proto_msgTypes[249]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15954,7 +16055,7 @@ func (x *GetDatasetExperimentIds_Response) String() string {
 func (*GetDatasetExperimentIds_Response) ProtoMessage() {}
 
 func (x *GetDatasetExperimentIds_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[248]
+	mi := &file_service_proto_msgTypes[249]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15989,7 +16090,7 @@ type GetDatasetRecords_Response struct {
 
 func (x *GetDatasetRecords_Response) Reset() {
 	*x = GetDatasetRecords_Response{}
-	mi := &file_service_proto_msgTypes[249]
+	mi := &file_service_proto_msgTypes[250]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16001,7 +16102,7 @@ func (x *GetDatasetRecords_Response) String() string {
 func (*GetDatasetRecords_Response) ProtoMessage() {}
 
 func (x *GetDatasetRecords_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[249]
+	mi := &file_service_proto_msgTypes[250]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16041,7 +16142,7 @@ type DeleteDatasetRecords_Response struct {
 
 func (x *DeleteDatasetRecords_Response) Reset() {
 	*x = DeleteDatasetRecords_Response{}
-	mi := &file_service_proto_msgTypes[250]
+	mi := &file_service_proto_msgTypes[251]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16053,7 +16154,7 @@ func (x *DeleteDatasetRecords_Response) String() string {
 func (*DeleteDatasetRecords_Response) ProtoMessage() {}
 
 func (x *DeleteDatasetRecords_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[250]
+	mi := &file_service_proto_msgTypes[251]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16086,7 +16187,7 @@ type AddDatasetToExperiments_Response struct {
 
 func (x *AddDatasetToExperiments_Response) Reset() {
 	*x = AddDatasetToExperiments_Response{}
-	mi := &file_service_proto_msgTypes[251]
+	mi := &file_service_proto_msgTypes[252]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16098,7 +16199,7 @@ func (x *AddDatasetToExperiments_Response) String() string {
 func (*AddDatasetToExperiments_Response) ProtoMessage() {}
 
 func (x *AddDatasetToExperiments_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[251]
+	mi := &file_service_proto_msgTypes[252]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16131,7 +16232,7 @@ type RemoveDatasetFromExperiments_Response struct {
 
 func (x *RemoveDatasetFromExperiments_Response) Reset() {
 	*x = RemoveDatasetFromExperiments_Response{}
-	mi := &file_service_proto_msgTypes[252]
+	mi := &file_service_proto_msgTypes[253]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16143,7 +16244,7 @@ func (x *RemoveDatasetFromExperiments_Response) String() string {
 func (*RemoveDatasetFromExperiments_Response) ProtoMessage() {}
 
 func (x *RemoveDatasetFromExperiments_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[252]
+	mi := &file_service_proto_msgTypes[253]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16186,7 +16287,7 @@ type RegisterScorer_Response struct {
 
 func (x *RegisterScorer_Response) Reset() {
 	*x = RegisterScorer_Response{}
-	mi := &file_service_proto_msgTypes[253]
+	mi := &file_service_proto_msgTypes[254]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16198,7 +16299,7 @@ func (x *RegisterScorer_Response) String() string {
 func (*RegisterScorer_Response) ProtoMessage() {}
 
 func (x *RegisterScorer_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[253]
+	mi := &file_service_proto_msgTypes[254]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16266,7 +16367,7 @@ type ListScorers_Response struct {
 
 func (x *ListScorers_Response) Reset() {
 	*x = ListScorers_Response{}
-	mi := &file_service_proto_msgTypes[254]
+	mi := &file_service_proto_msgTypes[255]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16278,7 +16379,7 @@ func (x *ListScorers_Response) String() string {
 func (*ListScorers_Response) ProtoMessage() {}
 
 func (x *ListScorers_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[254]
+	mi := &file_service_proto_msgTypes[255]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16311,7 +16412,7 @@ type ListScorerVersions_Response struct {
 
 func (x *ListScorerVersions_Response) Reset() {
 	*x = ListScorerVersions_Response{}
-	mi := &file_service_proto_msgTypes[255]
+	mi := &file_service_proto_msgTypes[256]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16323,7 +16424,7 @@ func (x *ListScorerVersions_Response) String() string {
 func (*ListScorerVersions_Response) ProtoMessage() {}
 
 func (x *ListScorerVersions_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[255]
+	mi := &file_service_proto_msgTypes[256]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16356,7 +16457,7 @@ type GetScorer_Response struct {
 
 func (x *GetScorer_Response) Reset() {
 	*x = GetScorer_Response{}
-	mi := &file_service_proto_msgTypes[256]
+	mi := &file_service_proto_msgTypes[257]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16368,7 +16469,7 @@ func (x *GetScorer_Response) String() string {
 func (*GetScorer_Response) ProtoMessage() {}
 
 func (x *GetScorer_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[256]
+	mi := &file_service_proto_msgTypes[257]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16399,7 +16500,7 @@ type DeleteScorer_Response struct {
 
 func (x *DeleteScorer_Response) Reset() {
 	*x = DeleteScorer_Response{}
-	mi := &file_service_proto_msgTypes[257]
+	mi := &file_service_proto_msgTypes[258]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16411,7 +16512,7 @@ func (x *DeleteScorer_Response) String() string {
 func (*DeleteScorer_Response) ProtoMessage() {}
 
 func (x *DeleteScorer_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[257]
+	mi := &file_service_proto_msgTypes[258]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16437,7 +16538,7 @@ type CreateGatewaySecret_Response struct {
 
 func (x *CreateGatewaySecret_Response) Reset() {
 	*x = CreateGatewaySecret_Response{}
-	mi := &file_service_proto_msgTypes[262]
+	mi := &file_service_proto_msgTypes[263]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16449,7 +16550,7 @@ func (x *CreateGatewaySecret_Response) String() string {
 func (*CreateGatewaySecret_Response) ProtoMessage() {}
 
 func (x *CreateGatewaySecret_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[262]
+	mi := &file_service_proto_msgTypes[263]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16482,7 +16583,7 @@ type GetGatewaySecretInfo_Response struct {
 
 func (x *GetGatewaySecretInfo_Response) Reset() {
 	*x = GetGatewaySecretInfo_Response{}
-	mi := &file_service_proto_msgTypes[263]
+	mi := &file_service_proto_msgTypes[264]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16494,7 +16595,7 @@ func (x *GetGatewaySecretInfo_Response) String() string {
 func (*GetGatewaySecretInfo_Response) ProtoMessage() {}
 
 func (x *GetGatewaySecretInfo_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[263]
+	mi := &file_service_proto_msgTypes[264]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16527,7 +16628,7 @@ type UpdateGatewaySecret_Response struct {
 
 func (x *UpdateGatewaySecret_Response) Reset() {
 	*x = UpdateGatewaySecret_Response{}
-	mi := &file_service_proto_msgTypes[266]
+	mi := &file_service_proto_msgTypes[267]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16539,7 +16640,7 @@ func (x *UpdateGatewaySecret_Response) String() string {
 func (*UpdateGatewaySecret_Response) ProtoMessage() {}
 
 func (x *UpdateGatewaySecret_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[266]
+	mi := &file_service_proto_msgTypes[267]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16570,7 +16671,7 @@ type DeleteGatewaySecret_Response struct {
 
 func (x *DeleteGatewaySecret_Response) Reset() {
 	*x = DeleteGatewaySecret_Response{}
-	mi := &file_service_proto_msgTypes[267]
+	mi := &file_service_proto_msgTypes[268]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16582,7 +16683,7 @@ func (x *DeleteGatewaySecret_Response) String() string {
 func (*DeleteGatewaySecret_Response) ProtoMessage() {}
 
 func (x *DeleteGatewaySecret_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[267]
+	mi := &file_service_proto_msgTypes[268]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16608,7 +16709,7 @@ type ListGatewaySecretInfos_Response struct {
 
 func (x *ListGatewaySecretInfos_Response) Reset() {
 	*x = ListGatewaySecretInfos_Response{}
-	mi := &file_service_proto_msgTypes[268]
+	mi := &file_service_proto_msgTypes[269]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16620,7 +16721,7 @@ func (x *ListGatewaySecretInfos_Response) String() string {
 func (*ListGatewaySecretInfos_Response) ProtoMessage() {}
 
 func (x *ListGatewaySecretInfos_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[268]
+	mi := &file_service_proto_msgTypes[269]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16653,7 +16754,7 @@ type CreateGatewayModelDefinition_Response struct {
 
 func (x *CreateGatewayModelDefinition_Response) Reset() {
 	*x = CreateGatewayModelDefinition_Response{}
-	mi := &file_service_proto_msgTypes[269]
+	mi := &file_service_proto_msgTypes[270]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16665,7 +16766,7 @@ func (x *CreateGatewayModelDefinition_Response) String() string {
 func (*CreateGatewayModelDefinition_Response) ProtoMessage() {}
 
 func (x *CreateGatewayModelDefinition_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[269]
+	mi := &file_service_proto_msgTypes[270]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16698,7 +16799,7 @@ type GetGatewayModelDefinition_Response struct {
 
 func (x *GetGatewayModelDefinition_Response) Reset() {
 	*x = GetGatewayModelDefinition_Response{}
-	mi := &file_service_proto_msgTypes[270]
+	mi := &file_service_proto_msgTypes[271]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16710,7 +16811,7 @@ func (x *GetGatewayModelDefinition_Response) String() string {
 func (*GetGatewayModelDefinition_Response) ProtoMessage() {}
 
 func (x *GetGatewayModelDefinition_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[270]
+	mi := &file_service_proto_msgTypes[271]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16743,7 +16844,7 @@ type ListGatewayModelDefinitions_Response struct {
 
 func (x *ListGatewayModelDefinitions_Response) Reset() {
 	*x = ListGatewayModelDefinitions_Response{}
-	mi := &file_service_proto_msgTypes[271]
+	mi := &file_service_proto_msgTypes[272]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16755,7 +16856,7 @@ func (x *ListGatewayModelDefinitions_Response) String() string {
 func (*ListGatewayModelDefinitions_Response) ProtoMessage() {}
 
 func (x *ListGatewayModelDefinitions_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[271]
+	mi := &file_service_proto_msgTypes[272]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16788,7 +16889,7 @@ type UpdateGatewayModelDefinition_Response struct {
 
 func (x *UpdateGatewayModelDefinition_Response) Reset() {
 	*x = UpdateGatewayModelDefinition_Response{}
-	mi := &file_service_proto_msgTypes[272]
+	mi := &file_service_proto_msgTypes[273]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16800,7 +16901,7 @@ func (x *UpdateGatewayModelDefinition_Response) String() string {
 func (*UpdateGatewayModelDefinition_Response) ProtoMessage() {}
 
 func (x *UpdateGatewayModelDefinition_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[272]
+	mi := &file_service_proto_msgTypes[273]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16831,7 +16932,7 @@ type DeleteGatewayModelDefinition_Response struct {
 
 func (x *DeleteGatewayModelDefinition_Response) Reset() {
 	*x = DeleteGatewayModelDefinition_Response{}
-	mi := &file_service_proto_msgTypes[273]
+	mi := &file_service_proto_msgTypes[274]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16843,7 +16944,7 @@ func (x *DeleteGatewayModelDefinition_Response) String() string {
 func (*DeleteGatewayModelDefinition_Response) ProtoMessage() {}
 
 func (x *DeleteGatewayModelDefinition_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[273]
+	mi := &file_service_proto_msgTypes[274]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16869,7 +16970,7 @@ type CreateGatewayEndpoint_Response struct {
 
 func (x *CreateGatewayEndpoint_Response) Reset() {
 	*x = CreateGatewayEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[274]
+	mi := &file_service_proto_msgTypes[275]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16881,7 +16982,7 @@ func (x *CreateGatewayEndpoint_Response) String() string {
 func (*CreateGatewayEndpoint_Response) ProtoMessage() {}
 
 func (x *CreateGatewayEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[274]
+	mi := &file_service_proto_msgTypes[275]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16914,7 +17015,7 @@ type GetGatewayEndpoint_Response struct {
 
 func (x *GetGatewayEndpoint_Response) Reset() {
 	*x = GetGatewayEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[275]
+	mi := &file_service_proto_msgTypes[276]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16926,7 +17027,7 @@ func (x *GetGatewayEndpoint_Response) String() string {
 func (*GetGatewayEndpoint_Response) ProtoMessage() {}
 
 func (x *GetGatewayEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[275]
+	mi := &file_service_proto_msgTypes[276]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16959,7 +17060,7 @@ type UpdateGatewayEndpoint_Response struct {
 
 func (x *UpdateGatewayEndpoint_Response) Reset() {
 	*x = UpdateGatewayEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[276]
+	mi := &file_service_proto_msgTypes[277]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16971,7 +17072,7 @@ func (x *UpdateGatewayEndpoint_Response) String() string {
 func (*UpdateGatewayEndpoint_Response) ProtoMessage() {}
 
 func (x *UpdateGatewayEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[276]
+	mi := &file_service_proto_msgTypes[277]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17002,7 +17103,7 @@ type DeleteGatewayEndpoint_Response struct {
 
 func (x *DeleteGatewayEndpoint_Response) Reset() {
 	*x = DeleteGatewayEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[277]
+	mi := &file_service_proto_msgTypes[278]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17014,7 +17115,7 @@ func (x *DeleteGatewayEndpoint_Response) String() string {
 func (*DeleteGatewayEndpoint_Response) ProtoMessage() {}
 
 func (x *DeleteGatewayEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[277]
+	mi := &file_service_proto_msgTypes[278]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17040,7 +17141,7 @@ type ListGatewayEndpoints_Response struct {
 
 func (x *ListGatewayEndpoints_Response) Reset() {
 	*x = ListGatewayEndpoints_Response{}
-	mi := &file_service_proto_msgTypes[278]
+	mi := &file_service_proto_msgTypes[279]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17052,7 +17153,7 @@ func (x *ListGatewayEndpoints_Response) String() string {
 func (*ListGatewayEndpoints_Response) ProtoMessage() {}
 
 func (x *ListGatewayEndpoints_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[278]
+	mi := &file_service_proto_msgTypes[279]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17085,7 +17186,7 @@ type AttachModelToGatewayEndpoint_Response struct {
 
 func (x *AttachModelToGatewayEndpoint_Response) Reset() {
 	*x = AttachModelToGatewayEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[279]
+	mi := &file_service_proto_msgTypes[280]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17097,7 +17198,7 @@ func (x *AttachModelToGatewayEndpoint_Response) String() string {
 func (*AttachModelToGatewayEndpoint_Response) ProtoMessage() {}
 
 func (x *AttachModelToGatewayEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[279]
+	mi := &file_service_proto_msgTypes[280]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17128,7 +17229,7 @@ type DetachModelFromGatewayEndpoint_Response struct {
 
 func (x *DetachModelFromGatewayEndpoint_Response) Reset() {
 	*x = DetachModelFromGatewayEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[280]
+	mi := &file_service_proto_msgTypes[281]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17140,7 +17241,7 @@ func (x *DetachModelFromGatewayEndpoint_Response) String() string {
 func (*DetachModelFromGatewayEndpoint_Response) ProtoMessage() {}
 
 func (x *DetachModelFromGatewayEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[280]
+	mi := &file_service_proto_msgTypes[281]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17166,7 +17267,7 @@ type CreateGatewayEndpointBinding_Response struct {
 
 func (x *CreateGatewayEndpointBinding_Response) Reset() {
 	*x = CreateGatewayEndpointBinding_Response{}
-	mi := &file_service_proto_msgTypes[281]
+	mi := &file_service_proto_msgTypes[282]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17178,7 +17279,7 @@ func (x *CreateGatewayEndpointBinding_Response) String() string {
 func (*CreateGatewayEndpointBinding_Response) ProtoMessage() {}
 
 func (x *CreateGatewayEndpointBinding_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[281]
+	mi := &file_service_proto_msgTypes[282]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17209,7 +17310,7 @@ type DeleteGatewayEndpointBinding_Response struct {
 
 func (x *DeleteGatewayEndpointBinding_Response) Reset() {
 	*x = DeleteGatewayEndpointBinding_Response{}
-	mi := &file_service_proto_msgTypes[282]
+	mi := &file_service_proto_msgTypes[283]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17221,7 +17322,7 @@ func (x *DeleteGatewayEndpointBinding_Response) String() string {
 func (*DeleteGatewayEndpointBinding_Response) ProtoMessage() {}
 
 func (x *DeleteGatewayEndpointBinding_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[282]
+	mi := &file_service_proto_msgTypes[283]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17247,7 +17348,7 @@ type ListGatewayEndpointBindings_Response struct {
 
 func (x *ListGatewayEndpointBindings_Response) Reset() {
 	*x = ListGatewayEndpointBindings_Response{}
-	mi := &file_service_proto_msgTypes[283]
+	mi := &file_service_proto_msgTypes[284]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17259,7 +17360,7 @@ func (x *ListGatewayEndpointBindings_Response) String() string {
 func (*ListGatewayEndpointBindings_Response) ProtoMessage() {}
 
 func (x *ListGatewayEndpointBindings_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[283]
+	mi := &file_service_proto_msgTypes[284]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17290,7 +17391,7 @@ type SetGatewayEndpointTag_Response struct {
 
 func (x *SetGatewayEndpointTag_Response) Reset() {
 	*x = SetGatewayEndpointTag_Response{}
-	mi := &file_service_proto_msgTypes[284]
+	mi := &file_service_proto_msgTypes[285]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17302,7 +17403,7 @@ func (x *SetGatewayEndpointTag_Response) String() string {
 func (*SetGatewayEndpointTag_Response) ProtoMessage() {}
 
 func (x *SetGatewayEndpointTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[284]
+	mi := &file_service_proto_msgTypes[285]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17326,7 +17427,7 @@ type DeleteGatewayEndpointTag_Response struct {
 
 func (x *DeleteGatewayEndpointTag_Response) Reset() {
 	*x = DeleteGatewayEndpointTag_Response{}
-	mi := &file_service_proto_msgTypes[285]
+	mi := &file_service_proto_msgTypes[286]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17338,7 +17439,7 @@ func (x *DeleteGatewayEndpointTag_Response) String() string {
 func (*DeleteGatewayEndpointTag_Response) ProtoMessage() {}
 
 func (x *DeleteGatewayEndpointTag_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[285]
+	mi := &file_service_proto_msgTypes[286]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17363,7 +17464,7 @@ type CreateGatewayBudgetPolicy_Response struct {
 
 func (x *CreateGatewayBudgetPolicy_Response) Reset() {
 	*x = CreateGatewayBudgetPolicy_Response{}
-	mi := &file_service_proto_msgTypes[286]
+	mi := &file_service_proto_msgTypes[287]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17375,7 +17476,7 @@ func (x *CreateGatewayBudgetPolicy_Response) String() string {
 func (*CreateGatewayBudgetPolicy_Response) ProtoMessage() {}
 
 func (x *CreateGatewayBudgetPolicy_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[286]
+	mi := &file_service_proto_msgTypes[287]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17407,7 +17508,7 @@ type GetGatewayBudgetPolicy_Response struct {
 
 func (x *GetGatewayBudgetPolicy_Response) Reset() {
 	*x = GetGatewayBudgetPolicy_Response{}
-	mi := &file_service_proto_msgTypes[287]
+	mi := &file_service_proto_msgTypes[288]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17419,7 +17520,7 @@ func (x *GetGatewayBudgetPolicy_Response) String() string {
 func (*GetGatewayBudgetPolicy_Response) ProtoMessage() {}
 
 func (x *GetGatewayBudgetPolicy_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[287]
+	mi := &file_service_proto_msgTypes[288]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17451,7 +17552,7 @@ type UpdateGatewayBudgetPolicy_Response struct {
 
 func (x *UpdateGatewayBudgetPolicy_Response) Reset() {
 	*x = UpdateGatewayBudgetPolicy_Response{}
-	mi := &file_service_proto_msgTypes[288]
+	mi := &file_service_proto_msgTypes[289]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17463,7 +17564,7 @@ func (x *UpdateGatewayBudgetPolicy_Response) String() string {
 func (*UpdateGatewayBudgetPolicy_Response) ProtoMessage() {}
 
 func (x *UpdateGatewayBudgetPolicy_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[288]
+	mi := &file_service_proto_msgTypes[289]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17494,7 +17595,7 @@ type DeleteGatewayBudgetPolicy_Response struct {
 
 func (x *DeleteGatewayBudgetPolicy_Response) Reset() {
 	*x = DeleteGatewayBudgetPolicy_Response{}
-	mi := &file_service_proto_msgTypes[289]
+	mi := &file_service_proto_msgTypes[290]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17506,7 +17607,7 @@ func (x *DeleteGatewayBudgetPolicy_Response) String() string {
 func (*DeleteGatewayBudgetPolicy_Response) ProtoMessage() {}
 
 func (x *DeleteGatewayBudgetPolicy_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[289]
+	mi := &file_service_proto_msgTypes[290]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17532,7 +17633,7 @@ type ListGatewayBudgetPolicies_Response struct {
 
 func (x *ListGatewayBudgetPolicies_Response) Reset() {
 	*x = ListGatewayBudgetPolicies_Response{}
-	mi := &file_service_proto_msgTypes[290]
+	mi := &file_service_proto_msgTypes[291]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17544,7 +17645,7 @@ func (x *ListGatewayBudgetPolicies_Response) String() string {
 func (*ListGatewayBudgetPolicies_Response) ProtoMessage() {}
 
 func (x *ListGatewayBudgetPolicies_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[290]
+	mi := &file_service_proto_msgTypes[291]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17586,7 +17687,7 @@ type ListGatewayBudgetWindows_BudgetWindow struct {
 
 func (x *ListGatewayBudgetWindows_BudgetWindow) Reset() {
 	*x = ListGatewayBudgetWindows_BudgetWindow{}
-	mi := &file_service_proto_msgTypes[291]
+	mi := &file_service_proto_msgTypes[292]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17598,7 +17699,7 @@ func (x *ListGatewayBudgetWindows_BudgetWindow) String() string {
 func (*ListGatewayBudgetWindows_BudgetWindow) ProtoMessage() {}
 
 func (x *ListGatewayBudgetWindows_BudgetWindow) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[291]
+	mi := &file_service_proto_msgTypes[292]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17651,7 +17752,7 @@ type ListGatewayBudgetWindows_Response struct {
 
 func (x *ListGatewayBudgetWindows_Response) Reset() {
 	*x = ListGatewayBudgetWindows_Response{}
-	mi := &file_service_proto_msgTypes[292]
+	mi := &file_service_proto_msgTypes[293]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17663,7 +17764,7 @@ func (x *ListGatewayBudgetWindows_Response) String() string {
 func (*ListGatewayBudgetWindows_Response) ProtoMessage() {}
 
 func (x *ListGatewayBudgetWindows_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[292]
+	mi := &file_service_proto_msgTypes[293]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17695,7 +17796,7 @@ type CreateGatewayGuardrail_Response struct {
 
 func (x *CreateGatewayGuardrail_Response) Reset() {
 	*x = CreateGatewayGuardrail_Response{}
-	mi := &file_service_proto_msgTypes[293]
+	mi := &file_service_proto_msgTypes[294]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17707,7 +17808,7 @@ func (x *CreateGatewayGuardrail_Response) String() string {
 func (*CreateGatewayGuardrail_Response) ProtoMessage() {}
 
 func (x *CreateGatewayGuardrail_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[293]
+	mi := &file_service_proto_msgTypes[294]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17739,7 +17840,7 @@ type GetGatewayGuardrail_Response struct {
 
 func (x *GetGatewayGuardrail_Response) Reset() {
 	*x = GetGatewayGuardrail_Response{}
-	mi := &file_service_proto_msgTypes[294]
+	mi := &file_service_proto_msgTypes[295]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17751,7 +17852,7 @@ func (x *GetGatewayGuardrail_Response) String() string {
 func (*GetGatewayGuardrail_Response) ProtoMessage() {}
 
 func (x *GetGatewayGuardrail_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[294]
+	mi := &file_service_proto_msgTypes[295]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17782,7 +17883,7 @@ type DeleteGatewayGuardrail_Response struct {
 
 func (x *DeleteGatewayGuardrail_Response) Reset() {
 	*x = DeleteGatewayGuardrail_Response{}
-	mi := &file_service_proto_msgTypes[295]
+	mi := &file_service_proto_msgTypes[296]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17794,7 +17895,7 @@ func (x *DeleteGatewayGuardrail_Response) String() string {
 func (*DeleteGatewayGuardrail_Response) ProtoMessage() {}
 
 func (x *DeleteGatewayGuardrail_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[295]
+	mi := &file_service_proto_msgTypes[296]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17820,7 +17921,7 @@ type ListGatewayGuardrails_Response struct {
 
 func (x *ListGatewayGuardrails_Response) Reset() {
 	*x = ListGatewayGuardrails_Response{}
-	mi := &file_service_proto_msgTypes[296]
+	mi := &file_service_proto_msgTypes[297]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17832,7 +17933,7 @@ func (x *ListGatewayGuardrails_Response) String() string {
 func (*ListGatewayGuardrails_Response) ProtoMessage() {}
 
 func (x *ListGatewayGuardrails_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[296]
+	mi := &file_service_proto_msgTypes[297]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17871,7 +17972,7 @@ type AddGuardrailToEndpoint_Response struct {
 
 func (x *AddGuardrailToEndpoint_Response) Reset() {
 	*x = AddGuardrailToEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[297]
+	mi := &file_service_proto_msgTypes[298]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17883,7 +17984,7 @@ func (x *AddGuardrailToEndpoint_Response) String() string {
 func (*AddGuardrailToEndpoint_Response) ProtoMessage() {}
 
 func (x *AddGuardrailToEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[297]
+	mi := &file_service_proto_msgTypes[298]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17914,7 +18015,7 @@ type RemoveGuardrailFromEndpoint_Response struct {
 
 func (x *RemoveGuardrailFromEndpoint_Response) Reset() {
 	*x = RemoveGuardrailFromEndpoint_Response{}
-	mi := &file_service_proto_msgTypes[298]
+	mi := &file_service_proto_msgTypes[299]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17926,7 +18027,7 @@ func (x *RemoveGuardrailFromEndpoint_Response) String() string {
 func (*RemoveGuardrailFromEndpoint_Response) ProtoMessage() {}
 
 func (x *RemoveGuardrailFromEndpoint_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[298]
+	mi := &file_service_proto_msgTypes[299]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17951,7 +18052,7 @@ type ListEndpointGuardrailConfigs_Response struct {
 
 func (x *ListEndpointGuardrailConfigs_Response) Reset() {
 	*x = ListEndpointGuardrailConfigs_Response{}
-	mi := &file_service_proto_msgTypes[299]
+	mi := &file_service_proto_msgTypes[300]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17963,7 +18064,7 @@ func (x *ListEndpointGuardrailConfigs_Response) String() string {
 func (*ListEndpointGuardrailConfigs_Response) ProtoMessage() {}
 
 func (x *ListEndpointGuardrailConfigs_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[299]
+	mi := &file_service_proto_msgTypes[300]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17995,7 +18096,7 @@ type UpdateEndpointGuardrailConfig_Response struct {
 
 func (x *UpdateEndpointGuardrailConfig_Response) Reset() {
 	*x = UpdateEndpointGuardrailConfig_Response{}
-	mi := &file_service_proto_msgTypes[300]
+	mi := &file_service_proto_msgTypes[301]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18007,7 +18108,7 @@ func (x *UpdateEndpointGuardrailConfig_Response) String() string {
 func (*UpdateEndpointGuardrailConfig_Response) ProtoMessage() {}
 
 func (x *UpdateEndpointGuardrailConfig_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[300]
+	mi := &file_service_proto_msgTypes[301]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18040,7 +18141,7 @@ type GetSecretsConfig_Response struct {
 
 func (x *GetSecretsConfig_Response) Reset() {
 	*x = GetSecretsConfig_Response{}
-	mi := &file_service_proto_msgTypes[301]
+	mi := &file_service_proto_msgTypes[302]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18052,7 +18153,7 @@ func (x *GetSecretsConfig_Response) String() string {
 func (*GetSecretsConfig_Response) ProtoMessage() {}
 
 func (x *GetSecretsConfig_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[301]
+	mi := &file_service_proto_msgTypes[302]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18085,7 +18186,7 @@ type ListWorkspaces_Response struct {
 
 func (x *ListWorkspaces_Response) Reset() {
 	*x = ListWorkspaces_Response{}
-	mi := &file_service_proto_msgTypes[302]
+	mi := &file_service_proto_msgTypes[303]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18097,7 +18198,7 @@ func (x *ListWorkspaces_Response) String() string {
 func (*ListWorkspaces_Response) ProtoMessage() {}
 
 func (x *ListWorkspaces_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[302]
+	mi := &file_service_proto_msgTypes[303]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18110,7 +18211,7 @@ func (x *ListWorkspaces_Response) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspaces_Response.ProtoReflect.Descriptor instead.
 func (*ListWorkspaces_Response) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{163, 0}
+	return file_service_proto_rawDescGZIP(), []int{164, 0}
 }
 
 func (x *ListWorkspaces_Response) GetWorkspaces() []*Workspace {
@@ -18130,7 +18231,7 @@ type CreateWorkspace_Response struct {
 
 func (x *CreateWorkspace_Response) Reset() {
 	*x = CreateWorkspace_Response{}
-	mi := &file_service_proto_msgTypes[303]
+	mi := &file_service_proto_msgTypes[304]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18142,7 +18243,7 @@ func (x *CreateWorkspace_Response) String() string {
 func (*CreateWorkspace_Response) ProtoMessage() {}
 
 func (x *CreateWorkspace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[303]
+	mi := &file_service_proto_msgTypes[304]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18155,7 +18256,7 @@ func (x *CreateWorkspace_Response) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateWorkspace_Response.ProtoReflect.Descriptor instead.
 func (*CreateWorkspace_Response) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{164, 0}
+	return file_service_proto_rawDescGZIP(), []int{165, 0}
 }
 
 func (x *CreateWorkspace_Response) GetWorkspace() *Workspace {
@@ -18175,7 +18276,7 @@ type GetWorkspace_Response struct {
 
 func (x *GetWorkspace_Response) Reset() {
 	*x = GetWorkspace_Response{}
-	mi := &file_service_proto_msgTypes[304]
+	mi := &file_service_proto_msgTypes[305]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18187,7 +18288,7 @@ func (x *GetWorkspace_Response) String() string {
 func (*GetWorkspace_Response) ProtoMessage() {}
 
 func (x *GetWorkspace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[304]
+	mi := &file_service_proto_msgTypes[305]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18200,7 +18301,7 @@ func (x *GetWorkspace_Response) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspace_Response.ProtoReflect.Descriptor instead.
 func (*GetWorkspace_Response) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{165, 0}
+	return file_service_proto_rawDescGZIP(), []int{166, 0}
 }
 
 func (x *GetWorkspace_Response) GetWorkspace() *Workspace {
@@ -18220,7 +18321,7 @@ type UpdateWorkspace_Response struct {
 
 func (x *UpdateWorkspace_Response) Reset() {
 	*x = UpdateWorkspace_Response{}
-	mi := &file_service_proto_msgTypes[305]
+	mi := &file_service_proto_msgTypes[306]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18232,7 +18333,7 @@ func (x *UpdateWorkspace_Response) String() string {
 func (*UpdateWorkspace_Response) ProtoMessage() {}
 
 func (x *UpdateWorkspace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[305]
+	mi := &file_service_proto_msgTypes[306]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18245,7 +18346,7 @@ func (x *UpdateWorkspace_Response) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateWorkspace_Response.ProtoReflect.Descriptor instead.
 func (*UpdateWorkspace_Response) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{166, 0}
+	return file_service_proto_rawDescGZIP(), []int{167, 0}
 }
 
 func (x *UpdateWorkspace_Response) GetWorkspace() *Workspace {
@@ -18263,7 +18364,7 @@ type DeleteWorkspace_Response struct {
 
 func (x *DeleteWorkspace_Response) Reset() {
 	*x = DeleteWorkspace_Response{}
-	mi := &file_service_proto_msgTypes[306]
+	mi := &file_service_proto_msgTypes[307]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -18275,7 +18376,7 @@ func (x *DeleteWorkspace_Response) String() string {
 func (*DeleteWorkspace_Response) ProtoMessage() {}
 
 func (x *DeleteWorkspace_Response) ProtoReflect() protoreflect.Message {
-	mi := &file_service_proto_msgTypes[306]
+	mi := &file_service_proto_msgTypes[307]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -18288,7 +18389,7 @@ func (x *DeleteWorkspace_Response) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkspace_Response.ProtoReflect.Descriptor instead.
 func (*DeleteWorkspace_Response) Descriptor() ([]byte, []int) {
-	return file_service_proto_rawDescGZIP(), []int{167, 0}
+	return file_service_proto_rawDescGZIP(), []int{168, 0}
 }
 
 var File_service_proto protoreflect.FileDescriptor
@@ -18340,7 +18441,7 @@ const file_service_proto_rawDesc = "" +
 	"start_time\x18\b \x01(\x03R\tstartTime\x12\x19\n" +
 	"\bend_time\x18\t \x01(\x03R\aendTime\x12!\n" +
 	"\fartifact_uri\x18\r \x01(\tR\vartifactUri\x12'\n" +
-	"\x0flifecycle_stage\x18\x0e \x01(\tR\x0elifecycleStage\"\x95\x02\n" +
+	"\x0flifecycle_stage\x18\x0e \x01(\tR\x0elifecycleStage\"\x80\x03\n" +
 	"\n" +
 	"Experiment\x12#\n" +
 	"\rexperiment_id\x18\x01 \x01(\tR\fexperimentId\x12\x12\n" +
@@ -18349,7 +18450,9 @@ const file_service_proto_rawDesc = "" +
 	"\x0flifecycle_stage\x18\x04 \x01(\tR\x0elifecycleStage\x12(\n" +
 	"\x10last_update_time\x18\x05 \x01(\x03R\x0elastUpdateTime\x12#\n" +
 	"\rcreation_time\x18\x06 \x01(\x03R\fcreationTime\x12)\n" +
-	"\x04tags\x18\a \x03(\v2\x15.mlflow.ExperimentTagR\x04tags\"e\n" +
+	"\x04tags\x18\a \x03(\v2\x15.mlflow.ExperimentTagR\x04tags\x12K\n" +
+	"\"effective_trace_archival_retention\x18\b \x01(\tR\x1feffectiveTraceArchivalRetention\x12\x1c\n" +
+	"\tworkspace\x18\t \x01(\tR\tworkspace\"e\n" +
 	"\fDatasetInput\x12$\n" +
 	"\x04tags\x18\x01 \x03(\v2\x10.mlflow.InputTagR\x04tags\x12/\n" +
 	"\adataset\x18\x02 \x01(\v2\x0f.mlflow.DatasetB\x04\xf8\x86\x19\x01R\adataset\"-\n" +
@@ -19516,30 +19619,36 @@ const file_service_proto_rawDesc = "" +
 	"\x06config\x18\x01 \x01(\v2\x1e.mlflow.GatewayGuardrailConfigR\x06config\"K\n" +
 	"\x10GetSecretsConfig\x1a7\n" +
 	"\bResponse\x12+\n" +
-	"\x11secrets_available\x18\x01 \x01(\bR\x10secretsAvailable\"{\n" +
+	"\x11secrets_available\x18\x01 \x01(\bR\x10secretsAvailable\"O\n" +
+	"\x13TraceArchivalConfig\x12\x1a\n" +
+	"\blocation\x18\x01 \x01(\tR\blocation\x12\x1c\n" +
+	"\tretention\x18\x02 \x01(\tR\tretention\"\xcc\x01\n" +
 	"\tWorkspace\x12\x18\n" +
 	"\x04name\x18\x01 \x01(\tB\x04\xf8\x86\x19\x01R\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x122\n" +
-	"\x15default_artifact_root\x18\x03 \x01(\tR\x13defaultArtifactRoot\"O\n" +
+	"\x15default_artifact_root\x18\x03 \x01(\tR\x13defaultArtifactRoot\x12O\n" +
+	"\x15trace_archival_config\x18\x04 \x01(\v2\x1b.mlflow.TraceArchivalConfigR\x13traceArchivalConfig\"O\n" +
 	"\x0eListWorkspaces\x1a=\n" +
 	"\bResponse\x121\n" +
 	"\n" +
 	"workspaces\x18\x01 \x03(\v2\x11.mlflow.WorkspaceR\n" +
-	"workspaces\"\xbe\x01\n" +
+	"workspaces\"\x8f\x02\n" +
 	"\x0fCreateWorkspace\x12\x18\n" +
 	"\x04name\x18\x01 \x01(\tB\x04\xf8\x86\x19\x01R\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x122\n" +
-	"\x15default_artifact_root\x18\x03 \x01(\tR\x13defaultArtifactRoot\x1a;\n" +
+	"\x15default_artifact_root\x18\x03 \x01(\tR\x13defaultArtifactRoot\x12O\n" +
+	"\x15trace_archival_config\x18\x04 \x01(\v2\x1b.mlflow.TraceArchivalConfigR\x13traceArchivalConfig\x1a;\n" +
 	"\bResponse\x12/\n" +
 	"\tworkspace\x18\x01 \x01(\v2\x11.mlflow.WorkspaceR\tworkspace\"x\n" +
 	"\fGetWorkspace\x12+\n" +
 	"\x0eworkspace_name\x18\x01 \x01(\tB\x04\xf8\x86\x19\x01R\rworkspaceName\x1a;\n" +
 	"\bResponse\x12/\n" +
-	"\tworkspace\x18\x01 \x01(\v2\x11.mlflow.WorkspaceR\tworkspace\"\xd1\x01\n" +
+	"\tworkspace\x18\x01 \x01(\v2\x11.mlflow.WorkspaceR\tworkspace\"\xa2\x02\n" +
 	"\x0fUpdateWorkspace\x12+\n" +
 	"\x0eworkspace_name\x18\x01 \x01(\tB\x04\xf8\x86\x19\x01R\rworkspaceName\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x122\n" +
-	"\x15default_artifact_root\x18\x03 \x01(\tR\x13defaultArtifactRoot\x1a;\n" +
+	"\x15default_artifact_root\x18\x03 \x01(\tR\x13defaultArtifactRoot\x12O\n" +
+	"\x15trace_archival_config\x18\x04 \x01(\v2\x1b.mlflow.TraceArchivalConfigR\x13traceArchivalConfig\x1a;\n" +
 	"\bResponse\x12/\n" +
 	"\tworkspace\x18\x01 \x01(\v2\x11.mlflow.WorkspaceR\tworkspace\"J\n" +
 	"\x0fDeleteWorkspace\x12+\n" +
@@ -20027,7 +20136,7 @@ func file_service_proto_rawDescGZIP() []byte {
 }
 
 var file_service_proto_enumTypes = make([]protoimpl.EnumInfo, 18)
-var file_service_proto_msgTypes = make([]protoimpl.MessageInfo, 307)
+var file_service_proto_msgTypes = make([]protoimpl.MessageInfo, 308)
 var file_service_proto_goTypes = []any{
 	(ViewType)(0),                             // 0: mlflow.ViewType
 	(SourceType)(0),                           // 1: mlflow.SourceType
@@ -20209,158 +20318,159 @@ var file_service_proto_goTypes = []any{
 	(*ListEndpointGuardrailConfigs)(nil),      // 177: mlflow.ListEndpointGuardrailConfigs
 	(*UpdateEndpointGuardrailConfig)(nil),     // 178: mlflow.UpdateEndpointGuardrailConfig
 	(*GetSecretsConfig)(nil),                  // 179: mlflow.GetSecretsConfig
-	(*Workspace)(nil),                         // 180: mlflow.Workspace
-	(*ListWorkspaces)(nil),                    // 181: mlflow.ListWorkspaces
-	(*CreateWorkspace)(nil),                   // 182: mlflow.CreateWorkspace
-	(*GetWorkspace)(nil),                      // 183: mlflow.GetWorkspace
-	(*UpdateWorkspace)(nil),                   // 184: mlflow.UpdateWorkspace
-	(*DeleteWorkspace)(nil),                   // 185: mlflow.DeleteWorkspace
-	(*CreateExperiment_Response)(nil),         // 186: mlflow.CreateExperiment.Response
-	(*SearchExperiments_Response)(nil),        // 187: mlflow.SearchExperiments.Response
-	(*GetExperiment_Response)(nil),            // 188: mlflow.GetExperiment.Response
-	(*DeleteExperiment_Response)(nil),         // 189: mlflow.DeleteExperiment.Response
-	(*RestoreExperiment_Response)(nil),        // 190: mlflow.RestoreExperiment.Response
-	(*UpdateExperiment_Response)(nil),         // 191: mlflow.UpdateExperiment.Response
-	(*CreateRun_Response)(nil),                // 192: mlflow.CreateRun.Response
-	(*UpdateRun_Response)(nil),                // 193: mlflow.UpdateRun.Response
-	(*DeleteRun_Response)(nil),                // 194: mlflow.DeleteRun.Response
-	(*RestoreRun_Response)(nil),               // 195: mlflow.RestoreRun.Response
-	(*LogMetric_Response)(nil),                // 196: mlflow.LogMetric.Response
-	(*LogParam_Response)(nil),                 // 197: mlflow.LogParam.Response
-	(*SetExperimentTag_Response)(nil),         // 198: mlflow.SetExperimentTag.Response
-	(*DeleteExperimentTag_Response)(nil),      // 199: mlflow.DeleteExperimentTag.Response
-	(*SetTag_Response)(nil),                   // 200: mlflow.SetTag.Response
-	(*DeleteTag_Response)(nil),                // 201: mlflow.DeleteTag.Response
-	(*GetRun_Response)(nil),                   // 202: mlflow.GetRun.Response
-	(*SearchRuns_Response)(nil),               // 203: mlflow.SearchRuns.Response
-	(*ListArtifacts_Response)(nil),            // 204: mlflow.ListArtifacts.Response
-	(*CreatePresignedUploadUrl_Response)(nil), // 205: mlflow.CreatePresignedUploadUrl.Response
-	nil,                               // 206: mlflow.CreatePresignedUploadUrl.Response.HeadersEntry
-	(*GetMetricHistory_Response)(nil), // 207: mlflow.GetMetricHistory.Response
-	(*GetMetricHistoryBulkInterval_Response)(nil),    // 208: mlflow.GetMetricHistoryBulkInterval.Response
-	(*LogBatch_Response)(nil),                        // 209: mlflow.LogBatch.Response
-	(*LogModel_Response)(nil),                        // 210: mlflow.LogModel.Response
-	(*LogInputs_Response)(nil),                       // 211: mlflow.LogInputs.Response
-	(*LogOutputs_Response)(nil),                      // 212: mlflow.LogOutputs.Response
-	(*GetExperimentByName_Response)(nil),             // 213: mlflow.GetExperimentByName.Response
-	(*CreateAssessment_Response)(nil),                // 214: mlflow.CreateAssessment.Response
-	(*UpdateAssessment_Response)(nil),                // 215: mlflow.UpdateAssessment.Response
-	(*DeleteAssessment_Response)(nil),                // 216: mlflow.DeleteAssessment.Response
-	(*GetAssessmentRequest_Response)(nil),            // 217: mlflow.GetAssessmentRequest.Response
-	(*StartTrace_Response)(nil),                      // 218: mlflow.StartTrace.Response
-	(*EndTrace_Response)(nil),                        // 219: mlflow.EndTrace.Response
-	(*GetTraceInfo_Response)(nil),                    // 220: mlflow.GetTraceInfo.Response
-	(*GetTraceInfoV3_Response)(nil),                  // 221: mlflow.GetTraceInfoV3.Response
-	(*BatchGetTraces_Response)(nil),                  // 222: mlflow.BatchGetTraces.Response
-	(*BatchGetTraceInfos_Response)(nil),              // 223: mlflow.BatchGetTraceInfos.Response
-	(*GetTrace_Response)(nil),                        // 224: mlflow.GetTrace.Response
-	(*SearchTraces_Response)(nil),                    // 225: mlflow.SearchTraces.Response
-	(*SearchUnifiedTraces_Response)(nil),             // 226: mlflow.SearchUnifiedTraces.Response
-	(*GetOnlineTraceDetails_Response)(nil),           // 227: mlflow.GetOnlineTraceDetails.Response
-	(*DeleteTraces_Response)(nil),                    // 228: mlflow.DeleteTraces.Response
-	(*DeleteTracesV3_Response)(nil),                  // 229: mlflow.DeleteTracesV3.Response
-	(*CalculateTraceFilterCorrelation_Response)(nil), // 230: mlflow.CalculateTraceFilterCorrelation.Response
-	(*QueryTraceMetrics_Response)(nil),               // 231: mlflow.QueryTraceMetrics.Response
-	nil,                                              // 232: mlflow.MetricDataPoint.DimensionsEntry
-	nil,                                              // 233: mlflow.MetricDataPoint.ValuesEntry
-	(*SetTraceTag_Response)(nil),                     // 234: mlflow.SetTraceTag.Response
-	(*SetTraceTagV3_Response)(nil),                   // 235: mlflow.SetTraceTagV3.Response
-	(*DeleteTraceTag_Response)(nil),                  // 236: mlflow.DeleteTraceTag.Response
-	(*DeleteTraceTagV3_Response)(nil),                // 237: mlflow.DeleteTraceTagV3.Response
-	(*TraceLocation_MlflowExperimentLocation)(nil),   // 238: mlflow.TraceLocation.MlflowExperimentLocation
-	(*TraceLocation_InferenceTableLocation)(nil),     // 239: mlflow.TraceLocation.InferenceTableLocation
-	nil,                              // 240: mlflow.TraceInfoV3.TraceMetadataEntry
-	nil,                              // 241: mlflow.TraceInfoV3.TagsEntry
-	(*StartTraceV3_Response)(nil),    // 242: mlflow.StartTraceV3.Response
-	(*LinkTracesToRun_Response)(nil), // 243: mlflow.LinkTracesToRun.Response
-	(*LinkPromptsToTrace_PromptVersionRef)(nil),     // 244: mlflow.LinkPromptsToTrace.PromptVersionRef
-	(*LinkPromptsToTrace_Response)(nil),             // 245: mlflow.LinkPromptsToTrace.Response
-	(*SearchDatasets_Response)(nil),                 // 246: mlflow.SearchDatasets.Response
-	(*CreateLoggedModel_Response)(nil),              // 247: mlflow.CreateLoggedModel.Response
-	(*FinalizeLoggedModel_Response)(nil),            // 248: mlflow.FinalizeLoggedModel.Response
-	(*GetLoggedModel_Response)(nil),                 // 249: mlflow.GetLoggedModel.Response
-	(*DeleteLoggedModel_Response)(nil),              // 250: mlflow.DeleteLoggedModel.Response
-	(*SearchLoggedModels_Dataset)(nil),              // 251: mlflow.SearchLoggedModels.Dataset
-	(*SearchLoggedModels_OrderBy)(nil),              // 252: mlflow.SearchLoggedModels.OrderBy
-	(*SearchLoggedModels_Response)(nil),             // 253: mlflow.SearchLoggedModels.Response
-	(*SetLoggedModelTags_Response)(nil),             // 254: mlflow.SetLoggedModelTags.Response
-	(*DeleteLoggedModelTag_Response)(nil),           // 255: mlflow.DeleteLoggedModelTag.Response
-	(*ListLoggedModelArtifacts_Response)(nil),       // 256: mlflow.ListLoggedModelArtifacts.Response
-	(*LogLoggedModelParamsRequest_Response)(nil),    // 257: mlflow.LogLoggedModelParamsRequest.Response
-	(*SearchTracesV3_Response)(nil),                 // 258: mlflow.SearchTracesV3.Response
-	(*CreateDataset_Response)(nil),                  // 259: mlflow.CreateDataset.Response
-	(*GetDataset_Response)(nil),                     // 260: mlflow.GetDataset.Response
-	(*DeleteDataset_Response)(nil),                  // 261: mlflow.DeleteDataset.Response
-	(*SearchEvaluationDatasets_Response)(nil),       // 262: mlflow.SearchEvaluationDatasets.Response
-	(*SetDatasetTags_Response)(nil),                 // 263: mlflow.SetDatasetTags.Response
-	(*DeleteDatasetTag_Response)(nil),               // 264: mlflow.DeleteDatasetTag.Response
-	(*UpsertDatasetRecords_Response)(nil),           // 265: mlflow.UpsertDatasetRecords.Response
-	(*GetDatasetExperimentIds_Response)(nil),        // 266: mlflow.GetDatasetExperimentIds.Response
-	(*GetDatasetRecords_Response)(nil),              // 267: mlflow.GetDatasetRecords.Response
-	(*DeleteDatasetRecords_Response)(nil),           // 268: mlflow.DeleteDatasetRecords.Response
-	(*AddDatasetToExperiments_Response)(nil),        // 269: mlflow.AddDatasetToExperiments.Response
-	(*RemoveDatasetFromExperiments_Response)(nil),   // 270: mlflow.RemoveDatasetFromExperiments.Response
-	(*RegisterScorer_Response)(nil),                 // 271: mlflow.RegisterScorer.Response
-	(*ListScorers_Response)(nil),                    // 272: mlflow.ListScorers.Response
-	(*ListScorerVersions_Response)(nil),             // 273: mlflow.ListScorerVersions.Response
-	(*GetScorer_Response)(nil),                      // 274: mlflow.GetScorer.Response
-	(*DeleteScorer_Response)(nil),                   // 275: mlflow.DeleteScorer.Response
-	nil,                                             // 276: mlflow.GatewaySecretInfo.MaskedValuesEntry
-	nil,                                             // 277: mlflow.GatewaySecretInfo.AuthConfigEntry
-	nil,                                             // 278: mlflow.CreateGatewaySecret.SecretValueEntry
-	nil,                                             // 279: mlflow.CreateGatewaySecret.AuthConfigEntry
-	(*CreateGatewaySecret_Response)(nil),            // 280: mlflow.CreateGatewaySecret.Response
-	(*GetGatewaySecretInfo_Response)(nil),           // 281: mlflow.GetGatewaySecretInfo.Response
-	nil,                                             // 282: mlflow.UpdateGatewaySecret.SecretValueEntry
-	nil,                                             // 283: mlflow.UpdateGatewaySecret.AuthConfigEntry
-	(*UpdateGatewaySecret_Response)(nil),            // 284: mlflow.UpdateGatewaySecret.Response
-	(*DeleteGatewaySecret_Response)(nil),            // 285: mlflow.DeleteGatewaySecret.Response
-	(*ListGatewaySecretInfos_Response)(nil),         // 286: mlflow.ListGatewaySecretInfos.Response
-	(*CreateGatewayModelDefinition_Response)(nil),   // 287: mlflow.CreateGatewayModelDefinition.Response
-	(*GetGatewayModelDefinition_Response)(nil),      // 288: mlflow.GetGatewayModelDefinition.Response
-	(*ListGatewayModelDefinitions_Response)(nil),    // 289: mlflow.ListGatewayModelDefinitions.Response
-	(*UpdateGatewayModelDefinition_Response)(nil),   // 290: mlflow.UpdateGatewayModelDefinition.Response
-	(*DeleteGatewayModelDefinition_Response)(nil),   // 291: mlflow.DeleteGatewayModelDefinition.Response
-	(*CreateGatewayEndpoint_Response)(nil),          // 292: mlflow.CreateGatewayEndpoint.Response
-	(*GetGatewayEndpoint_Response)(nil),             // 293: mlflow.GetGatewayEndpoint.Response
-	(*UpdateGatewayEndpoint_Response)(nil),          // 294: mlflow.UpdateGatewayEndpoint.Response
-	(*DeleteGatewayEndpoint_Response)(nil),          // 295: mlflow.DeleteGatewayEndpoint.Response
-	(*ListGatewayEndpoints_Response)(nil),           // 296: mlflow.ListGatewayEndpoints.Response
-	(*AttachModelToGatewayEndpoint_Response)(nil),   // 297: mlflow.AttachModelToGatewayEndpoint.Response
-	(*DetachModelFromGatewayEndpoint_Response)(nil), // 298: mlflow.DetachModelFromGatewayEndpoint.Response
-	(*CreateGatewayEndpointBinding_Response)(nil),   // 299: mlflow.CreateGatewayEndpointBinding.Response
-	(*DeleteGatewayEndpointBinding_Response)(nil),   // 300: mlflow.DeleteGatewayEndpointBinding.Response
-	(*ListGatewayEndpointBindings_Response)(nil),    // 301: mlflow.ListGatewayEndpointBindings.Response
-	(*SetGatewayEndpointTag_Response)(nil),          // 302: mlflow.SetGatewayEndpointTag.Response
-	(*DeleteGatewayEndpointTag_Response)(nil),       // 303: mlflow.DeleteGatewayEndpointTag.Response
-	(*CreateGatewayBudgetPolicy_Response)(nil),      // 304: mlflow.CreateGatewayBudgetPolicy.Response
-	(*GetGatewayBudgetPolicy_Response)(nil),         // 305: mlflow.GetGatewayBudgetPolicy.Response
-	(*UpdateGatewayBudgetPolicy_Response)(nil),      // 306: mlflow.UpdateGatewayBudgetPolicy.Response
-	(*DeleteGatewayBudgetPolicy_Response)(nil),      // 307: mlflow.DeleteGatewayBudgetPolicy.Response
-	(*ListGatewayBudgetPolicies_Response)(nil),      // 308: mlflow.ListGatewayBudgetPolicies.Response
-	(*ListGatewayBudgetWindows_BudgetWindow)(nil),   // 309: mlflow.ListGatewayBudgetWindows.BudgetWindow
-	(*ListGatewayBudgetWindows_Response)(nil),       // 310: mlflow.ListGatewayBudgetWindows.Response
-	(*CreateGatewayGuardrail_Response)(nil),         // 311: mlflow.CreateGatewayGuardrail.Response
-	(*GetGatewayGuardrail_Response)(nil),            // 312: mlflow.GetGatewayGuardrail.Response
-	(*DeleteGatewayGuardrail_Response)(nil),         // 313: mlflow.DeleteGatewayGuardrail.Response
-	(*ListGatewayGuardrails_Response)(nil),          // 314: mlflow.ListGatewayGuardrails.Response
-	(*AddGuardrailToEndpoint_Response)(nil),         // 315: mlflow.AddGuardrailToEndpoint.Response
-	(*RemoveGuardrailFromEndpoint_Response)(nil),    // 316: mlflow.RemoveGuardrailFromEndpoint.Response
-	(*ListEndpointGuardrailConfigs_Response)(nil),   // 317: mlflow.ListEndpointGuardrailConfigs.Response
-	(*UpdateEndpointGuardrailConfig_Response)(nil),  // 318: mlflow.UpdateEndpointGuardrailConfig.Response
-	(*GetSecretsConfig_Response)(nil),               // 319: mlflow.GetSecretsConfig.Response
-	(*ListWorkspaces_Response)(nil),                 // 320: mlflow.ListWorkspaces.Response
-	(*CreateWorkspace_Response)(nil),                // 321: mlflow.CreateWorkspace.Response
-	(*GetWorkspace_Response)(nil),                   // 322: mlflow.GetWorkspace.Response
-	(*UpdateWorkspace_Response)(nil),                // 323: mlflow.UpdateWorkspace.Response
-	(*DeleteWorkspace_Response)(nil),                // 324: mlflow.DeleteWorkspace.Response
-	(*assessmentspb.Assessment)(nil),                // 325: assessments.Assessment
-	(*fieldmaskpb.FieldMask)(nil),                   // 326: google.protobuf.FieldMask
-	(*otelpb.Span)(nil),                             // 327: opentelemetry.proto.trace.v1.Span
-	(*timestamppb.Timestamp)(nil),                   // 328: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),                     // 329: google.protobuf.Duration
-	(datasetspb.DatasetRecordSource_SourceType)(0),  // 330: datasets.DatasetRecordSource.SourceType
-	(*datasetspb.Dataset)(nil),                      // 331: datasets.Dataset
+	(*TraceArchivalConfig)(nil),               // 180: mlflow.TraceArchivalConfig
+	(*Workspace)(nil),                         // 181: mlflow.Workspace
+	(*ListWorkspaces)(nil),                    // 182: mlflow.ListWorkspaces
+	(*CreateWorkspace)(nil),                   // 183: mlflow.CreateWorkspace
+	(*GetWorkspace)(nil),                      // 184: mlflow.GetWorkspace
+	(*UpdateWorkspace)(nil),                   // 185: mlflow.UpdateWorkspace
+	(*DeleteWorkspace)(nil),                   // 186: mlflow.DeleteWorkspace
+	(*CreateExperiment_Response)(nil),         // 187: mlflow.CreateExperiment.Response
+	(*SearchExperiments_Response)(nil),        // 188: mlflow.SearchExperiments.Response
+	(*GetExperiment_Response)(nil),            // 189: mlflow.GetExperiment.Response
+	(*DeleteExperiment_Response)(nil),         // 190: mlflow.DeleteExperiment.Response
+	(*RestoreExperiment_Response)(nil),        // 191: mlflow.RestoreExperiment.Response
+	(*UpdateExperiment_Response)(nil),         // 192: mlflow.UpdateExperiment.Response
+	(*CreateRun_Response)(nil),                // 193: mlflow.CreateRun.Response
+	(*UpdateRun_Response)(nil),                // 194: mlflow.UpdateRun.Response
+	(*DeleteRun_Response)(nil),                // 195: mlflow.DeleteRun.Response
+	(*RestoreRun_Response)(nil),               // 196: mlflow.RestoreRun.Response
+	(*LogMetric_Response)(nil),                // 197: mlflow.LogMetric.Response
+	(*LogParam_Response)(nil),                 // 198: mlflow.LogParam.Response
+	(*SetExperimentTag_Response)(nil),         // 199: mlflow.SetExperimentTag.Response
+	(*DeleteExperimentTag_Response)(nil),      // 200: mlflow.DeleteExperimentTag.Response
+	(*SetTag_Response)(nil),                   // 201: mlflow.SetTag.Response
+	(*DeleteTag_Response)(nil),                // 202: mlflow.DeleteTag.Response
+	(*GetRun_Response)(nil),                   // 203: mlflow.GetRun.Response
+	(*SearchRuns_Response)(nil),               // 204: mlflow.SearchRuns.Response
+	(*ListArtifacts_Response)(nil),            // 205: mlflow.ListArtifacts.Response
+	(*CreatePresignedUploadUrl_Response)(nil), // 206: mlflow.CreatePresignedUploadUrl.Response
+	nil,                               // 207: mlflow.CreatePresignedUploadUrl.Response.HeadersEntry
+	(*GetMetricHistory_Response)(nil), // 208: mlflow.GetMetricHistory.Response
+	(*GetMetricHistoryBulkInterval_Response)(nil),    // 209: mlflow.GetMetricHistoryBulkInterval.Response
+	(*LogBatch_Response)(nil),                        // 210: mlflow.LogBatch.Response
+	(*LogModel_Response)(nil),                        // 211: mlflow.LogModel.Response
+	(*LogInputs_Response)(nil),                       // 212: mlflow.LogInputs.Response
+	(*LogOutputs_Response)(nil),                      // 213: mlflow.LogOutputs.Response
+	(*GetExperimentByName_Response)(nil),             // 214: mlflow.GetExperimentByName.Response
+	(*CreateAssessment_Response)(nil),                // 215: mlflow.CreateAssessment.Response
+	(*UpdateAssessment_Response)(nil),                // 216: mlflow.UpdateAssessment.Response
+	(*DeleteAssessment_Response)(nil),                // 217: mlflow.DeleteAssessment.Response
+	(*GetAssessmentRequest_Response)(nil),            // 218: mlflow.GetAssessmentRequest.Response
+	(*StartTrace_Response)(nil),                      // 219: mlflow.StartTrace.Response
+	(*EndTrace_Response)(nil),                        // 220: mlflow.EndTrace.Response
+	(*GetTraceInfo_Response)(nil),                    // 221: mlflow.GetTraceInfo.Response
+	(*GetTraceInfoV3_Response)(nil),                  // 222: mlflow.GetTraceInfoV3.Response
+	(*BatchGetTraces_Response)(nil),                  // 223: mlflow.BatchGetTraces.Response
+	(*BatchGetTraceInfos_Response)(nil),              // 224: mlflow.BatchGetTraceInfos.Response
+	(*GetTrace_Response)(nil),                        // 225: mlflow.GetTrace.Response
+	(*SearchTraces_Response)(nil),                    // 226: mlflow.SearchTraces.Response
+	(*SearchUnifiedTraces_Response)(nil),             // 227: mlflow.SearchUnifiedTraces.Response
+	(*GetOnlineTraceDetails_Response)(nil),           // 228: mlflow.GetOnlineTraceDetails.Response
+	(*DeleteTraces_Response)(nil),                    // 229: mlflow.DeleteTraces.Response
+	(*DeleteTracesV3_Response)(nil),                  // 230: mlflow.DeleteTracesV3.Response
+	(*CalculateTraceFilterCorrelation_Response)(nil), // 231: mlflow.CalculateTraceFilterCorrelation.Response
+	(*QueryTraceMetrics_Response)(nil),               // 232: mlflow.QueryTraceMetrics.Response
+	nil,                                              // 233: mlflow.MetricDataPoint.DimensionsEntry
+	nil,                                              // 234: mlflow.MetricDataPoint.ValuesEntry
+	(*SetTraceTag_Response)(nil),                     // 235: mlflow.SetTraceTag.Response
+	(*SetTraceTagV3_Response)(nil),                   // 236: mlflow.SetTraceTagV3.Response
+	(*DeleteTraceTag_Response)(nil),                  // 237: mlflow.DeleteTraceTag.Response
+	(*DeleteTraceTagV3_Response)(nil),                // 238: mlflow.DeleteTraceTagV3.Response
+	(*TraceLocation_MlflowExperimentLocation)(nil),   // 239: mlflow.TraceLocation.MlflowExperimentLocation
+	(*TraceLocation_InferenceTableLocation)(nil),     // 240: mlflow.TraceLocation.InferenceTableLocation
+	nil,                              // 241: mlflow.TraceInfoV3.TraceMetadataEntry
+	nil,                              // 242: mlflow.TraceInfoV3.TagsEntry
+	(*StartTraceV3_Response)(nil),    // 243: mlflow.StartTraceV3.Response
+	(*LinkTracesToRun_Response)(nil), // 244: mlflow.LinkTracesToRun.Response
+	(*LinkPromptsToTrace_PromptVersionRef)(nil),     // 245: mlflow.LinkPromptsToTrace.PromptVersionRef
+	(*LinkPromptsToTrace_Response)(nil),             // 246: mlflow.LinkPromptsToTrace.Response
+	(*SearchDatasets_Response)(nil),                 // 247: mlflow.SearchDatasets.Response
+	(*CreateLoggedModel_Response)(nil),              // 248: mlflow.CreateLoggedModel.Response
+	(*FinalizeLoggedModel_Response)(nil),            // 249: mlflow.FinalizeLoggedModel.Response
+	(*GetLoggedModel_Response)(nil),                 // 250: mlflow.GetLoggedModel.Response
+	(*DeleteLoggedModel_Response)(nil),              // 251: mlflow.DeleteLoggedModel.Response
+	(*SearchLoggedModels_Dataset)(nil),              // 252: mlflow.SearchLoggedModels.Dataset
+	(*SearchLoggedModels_OrderBy)(nil),              // 253: mlflow.SearchLoggedModels.OrderBy
+	(*SearchLoggedModels_Response)(nil),             // 254: mlflow.SearchLoggedModels.Response
+	(*SetLoggedModelTags_Response)(nil),             // 255: mlflow.SetLoggedModelTags.Response
+	(*DeleteLoggedModelTag_Response)(nil),           // 256: mlflow.DeleteLoggedModelTag.Response
+	(*ListLoggedModelArtifacts_Response)(nil),       // 257: mlflow.ListLoggedModelArtifacts.Response
+	(*LogLoggedModelParamsRequest_Response)(nil),    // 258: mlflow.LogLoggedModelParamsRequest.Response
+	(*SearchTracesV3_Response)(nil),                 // 259: mlflow.SearchTracesV3.Response
+	(*CreateDataset_Response)(nil),                  // 260: mlflow.CreateDataset.Response
+	(*GetDataset_Response)(nil),                     // 261: mlflow.GetDataset.Response
+	(*DeleteDataset_Response)(nil),                  // 262: mlflow.DeleteDataset.Response
+	(*SearchEvaluationDatasets_Response)(nil),       // 263: mlflow.SearchEvaluationDatasets.Response
+	(*SetDatasetTags_Response)(nil),                 // 264: mlflow.SetDatasetTags.Response
+	(*DeleteDatasetTag_Response)(nil),               // 265: mlflow.DeleteDatasetTag.Response
+	(*UpsertDatasetRecords_Response)(nil),           // 266: mlflow.UpsertDatasetRecords.Response
+	(*GetDatasetExperimentIds_Response)(nil),        // 267: mlflow.GetDatasetExperimentIds.Response
+	(*GetDatasetRecords_Response)(nil),              // 268: mlflow.GetDatasetRecords.Response
+	(*DeleteDatasetRecords_Response)(nil),           // 269: mlflow.DeleteDatasetRecords.Response
+	(*AddDatasetToExperiments_Response)(nil),        // 270: mlflow.AddDatasetToExperiments.Response
+	(*RemoveDatasetFromExperiments_Response)(nil),   // 271: mlflow.RemoveDatasetFromExperiments.Response
+	(*RegisterScorer_Response)(nil),                 // 272: mlflow.RegisterScorer.Response
+	(*ListScorers_Response)(nil),                    // 273: mlflow.ListScorers.Response
+	(*ListScorerVersions_Response)(nil),             // 274: mlflow.ListScorerVersions.Response
+	(*GetScorer_Response)(nil),                      // 275: mlflow.GetScorer.Response
+	(*DeleteScorer_Response)(nil),                   // 276: mlflow.DeleteScorer.Response
+	nil,                                             // 277: mlflow.GatewaySecretInfo.MaskedValuesEntry
+	nil,                                             // 278: mlflow.GatewaySecretInfo.AuthConfigEntry
+	nil,                                             // 279: mlflow.CreateGatewaySecret.SecretValueEntry
+	nil,                                             // 280: mlflow.CreateGatewaySecret.AuthConfigEntry
+	(*CreateGatewaySecret_Response)(nil),            // 281: mlflow.CreateGatewaySecret.Response
+	(*GetGatewaySecretInfo_Response)(nil),           // 282: mlflow.GetGatewaySecretInfo.Response
+	nil,                                             // 283: mlflow.UpdateGatewaySecret.SecretValueEntry
+	nil,                                             // 284: mlflow.UpdateGatewaySecret.AuthConfigEntry
+	(*UpdateGatewaySecret_Response)(nil),            // 285: mlflow.UpdateGatewaySecret.Response
+	(*DeleteGatewaySecret_Response)(nil),            // 286: mlflow.DeleteGatewaySecret.Response
+	(*ListGatewaySecretInfos_Response)(nil),         // 287: mlflow.ListGatewaySecretInfos.Response
+	(*CreateGatewayModelDefinition_Response)(nil),   // 288: mlflow.CreateGatewayModelDefinition.Response
+	(*GetGatewayModelDefinition_Response)(nil),      // 289: mlflow.GetGatewayModelDefinition.Response
+	(*ListGatewayModelDefinitions_Response)(nil),    // 290: mlflow.ListGatewayModelDefinitions.Response
+	(*UpdateGatewayModelDefinition_Response)(nil),   // 291: mlflow.UpdateGatewayModelDefinition.Response
+	(*DeleteGatewayModelDefinition_Response)(nil),   // 292: mlflow.DeleteGatewayModelDefinition.Response
+	(*CreateGatewayEndpoint_Response)(nil),          // 293: mlflow.CreateGatewayEndpoint.Response
+	(*GetGatewayEndpoint_Response)(nil),             // 294: mlflow.GetGatewayEndpoint.Response
+	(*UpdateGatewayEndpoint_Response)(nil),          // 295: mlflow.UpdateGatewayEndpoint.Response
+	(*DeleteGatewayEndpoint_Response)(nil),          // 296: mlflow.DeleteGatewayEndpoint.Response
+	(*ListGatewayEndpoints_Response)(nil),           // 297: mlflow.ListGatewayEndpoints.Response
+	(*AttachModelToGatewayEndpoint_Response)(nil),   // 298: mlflow.AttachModelToGatewayEndpoint.Response
+	(*DetachModelFromGatewayEndpoint_Response)(nil), // 299: mlflow.DetachModelFromGatewayEndpoint.Response
+	(*CreateGatewayEndpointBinding_Response)(nil),   // 300: mlflow.CreateGatewayEndpointBinding.Response
+	(*DeleteGatewayEndpointBinding_Response)(nil),   // 301: mlflow.DeleteGatewayEndpointBinding.Response
+	(*ListGatewayEndpointBindings_Response)(nil),    // 302: mlflow.ListGatewayEndpointBindings.Response
+	(*SetGatewayEndpointTag_Response)(nil),          // 303: mlflow.SetGatewayEndpointTag.Response
+	(*DeleteGatewayEndpointTag_Response)(nil),       // 304: mlflow.DeleteGatewayEndpointTag.Response
+	(*CreateGatewayBudgetPolicy_Response)(nil),      // 305: mlflow.CreateGatewayBudgetPolicy.Response
+	(*GetGatewayBudgetPolicy_Response)(nil),         // 306: mlflow.GetGatewayBudgetPolicy.Response
+	(*UpdateGatewayBudgetPolicy_Response)(nil),      // 307: mlflow.UpdateGatewayBudgetPolicy.Response
+	(*DeleteGatewayBudgetPolicy_Response)(nil),      // 308: mlflow.DeleteGatewayBudgetPolicy.Response
+	(*ListGatewayBudgetPolicies_Response)(nil),      // 309: mlflow.ListGatewayBudgetPolicies.Response
+	(*ListGatewayBudgetWindows_BudgetWindow)(nil),   // 310: mlflow.ListGatewayBudgetWindows.BudgetWindow
+	(*ListGatewayBudgetWindows_Response)(nil),       // 311: mlflow.ListGatewayBudgetWindows.Response
+	(*CreateGatewayGuardrail_Response)(nil),         // 312: mlflow.CreateGatewayGuardrail.Response
+	(*GetGatewayGuardrail_Response)(nil),            // 313: mlflow.GetGatewayGuardrail.Response
+	(*DeleteGatewayGuardrail_Response)(nil),         // 314: mlflow.DeleteGatewayGuardrail.Response
+	(*ListGatewayGuardrails_Response)(nil),          // 315: mlflow.ListGatewayGuardrails.Response
+	(*AddGuardrailToEndpoint_Response)(nil),         // 316: mlflow.AddGuardrailToEndpoint.Response
+	(*RemoveGuardrailFromEndpoint_Response)(nil),    // 317: mlflow.RemoveGuardrailFromEndpoint.Response
+	(*ListEndpointGuardrailConfigs_Response)(nil),   // 318: mlflow.ListEndpointGuardrailConfigs.Response
+	(*UpdateEndpointGuardrailConfig_Response)(nil),  // 319: mlflow.UpdateEndpointGuardrailConfig.Response
+	(*GetSecretsConfig_Response)(nil),               // 320: mlflow.GetSecretsConfig.Response
+	(*ListWorkspaces_Response)(nil),                 // 321: mlflow.ListWorkspaces.Response
+	(*CreateWorkspace_Response)(nil),                // 322: mlflow.CreateWorkspace.Response
+	(*GetWorkspace_Response)(nil),                   // 323: mlflow.GetWorkspace.Response
+	(*UpdateWorkspace_Response)(nil),                // 324: mlflow.UpdateWorkspace.Response
+	(*DeleteWorkspace_Response)(nil),                // 325: mlflow.DeleteWorkspace.Response
+	(*assessmentspb.Assessment)(nil),                // 326: assessments.Assessment
+	(*fieldmaskpb.FieldMask)(nil),                   // 327: google.protobuf.FieldMask
+	(*otelpb.Span)(nil),                             // 328: opentelemetry.proto.trace.v1.Span
+	(*timestamppb.Timestamp)(nil),                   // 329: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),                     // 330: google.protobuf.Duration
+	(datasetspb.DatasetRecordSource_SourceType)(0),  // 331: datasets.DatasetRecordSource.SourceType
+	(*datasetspb.Dataset)(nil),                      // 332: datasets.Dataset
 }
 var file_service_proto_depIdxs = []int32{
 	26,  // 0: mlflow.Run.info:type_name -> mlflow.RunInfo
@@ -20388,9 +20498,9 @@ var file_service_proto_depIdxs = []int32{
 	28,  // 22: mlflow.LogInputs.datasets:type_name -> mlflow.DatasetInput
 	29,  // 23: mlflow.LogInputs.models:type_name -> mlflow.ModelInput
 	32,  // 24: mlflow.LogOutputs.models:type_name -> mlflow.ModelOutput
-	325, // 25: mlflow.CreateAssessment.assessment:type_name -> assessments.Assessment
-	325, // 26: mlflow.UpdateAssessment.assessment:type_name -> assessments.Assessment
-	326, // 27: mlflow.UpdateAssessment.update_mask:type_name -> google.protobuf.FieldMask
+	326, // 25: mlflow.CreateAssessment.assessment:type_name -> assessments.Assessment
+	326, // 26: mlflow.UpdateAssessment.assessment:type_name -> assessments.Assessment
+	327, // 27: mlflow.UpdateAssessment.update_mask:type_name -> google.protobuf.FieldMask
 	3,   // 28: mlflow.TraceInfo.status:type_name -> mlflow.TraceStatus
 	67,  // 29: mlflow.TraceInfo.request_metadata:type_name -> mlflow.TraceRequestMetadata
 	68,  // 30: mlflow.TraceInfo.tags:type_name -> mlflow.TraceTag
@@ -20402,27 +20512,27 @@ var file_service_proto_depIdxs = []int32{
 	5,   // 36: mlflow.MetricAggregation.aggregation_type:type_name -> mlflow.AggregationType
 	4,   // 37: mlflow.QueryTraceMetrics.view_type:type_name -> mlflow.MetricViewType
 	82,  // 38: mlflow.QueryTraceMetrics.aggregations:type_name -> mlflow.MetricAggregation
-	232, // 39: mlflow.MetricDataPoint.dimensions:type_name -> mlflow.MetricDataPoint.DimensionsEntry
-	233, // 40: mlflow.MetricDataPoint.values:type_name -> mlflow.MetricDataPoint.ValuesEntry
+	233, // 39: mlflow.MetricDataPoint.dimensions:type_name -> mlflow.MetricDataPoint.DimensionsEntry
+	234, // 40: mlflow.MetricDataPoint.values:type_name -> mlflow.MetricDataPoint.ValuesEntry
 	91,  // 41: mlflow.Trace.trace_info:type_name -> mlflow.TraceInfoV3
-	327, // 42: mlflow.Trace.spans:type_name -> opentelemetry.proto.trace.v1.Span
+	328, // 42: mlflow.Trace.spans:type_name -> opentelemetry.proto.trace.v1.Span
 	16,  // 43: mlflow.TraceLocation.type:type_name -> mlflow.TraceLocation.TraceLocationType
-	238, // 44: mlflow.TraceLocation.mlflow_experiment:type_name -> mlflow.TraceLocation.MlflowExperimentLocation
-	239, // 45: mlflow.TraceLocation.inference_table:type_name -> mlflow.TraceLocation.InferenceTableLocation
+	239, // 44: mlflow.TraceLocation.mlflow_experiment:type_name -> mlflow.TraceLocation.MlflowExperimentLocation
+	240, // 45: mlflow.TraceLocation.inference_table:type_name -> mlflow.TraceLocation.InferenceTableLocation
 	90,  // 46: mlflow.TraceInfoV3.trace_location:type_name -> mlflow.TraceLocation
-	328, // 47: mlflow.TraceInfoV3.request_time:type_name -> google.protobuf.Timestamp
-	329, // 48: mlflow.TraceInfoV3.execution_duration:type_name -> google.protobuf.Duration
+	329, // 47: mlflow.TraceInfoV3.request_time:type_name -> google.protobuf.Timestamp
+	330, // 48: mlflow.TraceInfoV3.execution_duration:type_name -> google.protobuf.Duration
 	17,  // 49: mlflow.TraceInfoV3.state:type_name -> mlflow.TraceInfoV3.State
-	240, // 50: mlflow.TraceInfoV3.trace_metadata:type_name -> mlflow.TraceInfoV3.TraceMetadataEntry
-	325, // 51: mlflow.TraceInfoV3.assessments:type_name -> assessments.Assessment
-	241, // 52: mlflow.TraceInfoV3.tags:type_name -> mlflow.TraceInfoV3.TagsEntry
+	241, // 50: mlflow.TraceInfoV3.trace_metadata:type_name -> mlflow.TraceInfoV3.TraceMetadataEntry
+	326, // 51: mlflow.TraceInfoV3.assessments:type_name -> assessments.Assessment
+	242, // 52: mlflow.TraceInfoV3.tags:type_name -> mlflow.TraceInfoV3.TagsEntry
 	89,  // 53: mlflow.StartTraceV3.trace:type_name -> mlflow.Trace
-	244, // 54: mlflow.LinkPromptsToTrace.prompt_versions:type_name -> mlflow.LinkPromptsToTrace.PromptVersionRef
+	245, // 54: mlflow.LinkPromptsToTrace.prompt_versions:type_name -> mlflow.LinkPromptsToTrace.PromptVersionRef
 	111, // 55: mlflow.CreateLoggedModel.params:type_name -> mlflow.LoggedModelParameter
 	108, // 56: mlflow.CreateLoggedModel.tags:type_name -> mlflow.LoggedModelTag
 	6,   // 57: mlflow.FinalizeLoggedModel.status:type_name -> mlflow.LoggedModelStatus
-	251, // 58: mlflow.SearchLoggedModels.datasets:type_name -> mlflow.SearchLoggedModels.Dataset
-	252, // 59: mlflow.SearchLoggedModels.order_by:type_name -> mlflow.SearchLoggedModels.OrderBy
+	252, // 58: mlflow.SearchLoggedModels.datasets:type_name -> mlflow.SearchLoggedModels.Dataset
+	253, // 59: mlflow.SearchLoggedModels.order_by:type_name -> mlflow.SearchLoggedModels.OrderBy
 	108, // 60: mlflow.SetLoggedModelTags.tags:type_name -> mlflow.LoggedModelTag
 	111, // 61: mlflow.LogLoggedModelParamsRequest.params:type_name -> mlflow.LoggedModelParameter
 	107, // 62: mlflow.LoggedModel.info:type_name -> mlflow.LoggedModelInfo
@@ -20433,19 +20543,19 @@ var file_service_proto_depIdxs = []int32{
 	111, // 67: mlflow.LoggedModelData.params:type_name -> mlflow.LoggedModelParameter
 	18,  // 68: mlflow.LoggedModelData.metrics:type_name -> mlflow.Metric
 	90,  // 69: mlflow.SearchTracesV3.locations:type_name -> mlflow.TraceLocation
-	330, // 70: mlflow.CreateDataset.source_type:type_name -> datasets.DatasetRecordSource.SourceType
-	276, // 71: mlflow.GatewaySecretInfo.masked_values:type_name -> mlflow.GatewaySecretInfo.MaskedValuesEntry
-	277, // 72: mlflow.GatewaySecretInfo.auth_config:type_name -> mlflow.GatewaySecretInfo.AuthConfigEntry
+	331, // 70: mlflow.CreateDataset.source_type:type_name -> datasets.DatasetRecordSource.SourceType
+	277, // 71: mlflow.GatewaySecretInfo.masked_values:type_name -> mlflow.GatewaySecretInfo.MaskedValuesEntry
+	278, // 72: mlflow.GatewaySecretInfo.auth_config:type_name -> mlflow.GatewaySecretInfo.AuthConfigEntry
 	132, // 73: mlflow.GatewayEndpointModelMapping.model_definition:type_name -> mlflow.GatewayModelDefinition
 	9,   // 74: mlflow.GatewayEndpointModelMapping.linkage_type:type_name -> mlflow.GatewayModelLinkageType
 	133, // 75: mlflow.GatewayEndpoint.model_mappings:type_name -> mlflow.GatewayEndpointModelMapping
 	135, // 76: mlflow.GatewayEndpoint.tags:type_name -> mlflow.GatewayEndpointTag
 	7,   // 77: mlflow.GatewayEndpoint.routing_strategy:type_name -> mlflow.RoutingStrategy
 	148, // 78: mlflow.GatewayEndpoint.fallback_config:type_name -> mlflow.FallbackConfig
-	278, // 79: mlflow.CreateGatewaySecret.secret_value:type_name -> mlflow.CreateGatewaySecret.SecretValueEntry
-	279, // 80: mlflow.CreateGatewaySecret.auth_config:type_name -> mlflow.CreateGatewaySecret.AuthConfigEntry
-	282, // 81: mlflow.UpdateGatewaySecret.secret_value:type_name -> mlflow.UpdateGatewaySecret.SecretValueEntry
-	283, // 82: mlflow.UpdateGatewaySecret.auth_config:type_name -> mlflow.UpdateGatewaySecret.AuthConfigEntry
+	279, // 79: mlflow.CreateGatewaySecret.secret_value:type_name -> mlflow.CreateGatewaySecret.SecretValueEntry
+	280, // 80: mlflow.CreateGatewaySecret.auth_config:type_name -> mlflow.CreateGatewaySecret.AuthConfigEntry
+	283, // 81: mlflow.UpdateGatewaySecret.secret_value:type_name -> mlflow.UpdateGatewaySecret.SecretValueEntry
+	284, // 82: mlflow.UpdateGatewaySecret.auth_config:type_name -> mlflow.UpdateGatewaySecret.AuthConfigEntry
 	10,  // 83: mlflow.BudgetDuration.unit:type_name -> mlflow.BudgetDurationUnit
 	8,   // 84: mlflow.FallbackConfig.strategy:type_name -> mlflow.FallbackStrategy
 	9,   // 85: mlflow.GatewayEndpointModelConfig.linkage_type:type_name -> mlflow.GatewayModelLinkageType
@@ -20474,325 +20584,328 @@ var file_service_proto_depIdxs = []int32{
 	169, // 108: mlflow.GatewayGuardrailConfig.guardrail:type_name -> mlflow.GatewayGuardrail
 	14,  // 109: mlflow.CreateGatewayGuardrail.stage:type_name -> mlflow.GuardrailStage
 	15,  // 110: mlflow.CreateGatewayGuardrail.action:type_name -> mlflow.GuardrailAction
-	27,  // 111: mlflow.SearchExperiments.Response.experiments:type_name -> mlflow.Experiment
-	27,  // 112: mlflow.GetExperiment.Response.experiment:type_name -> mlflow.Experiment
-	20,  // 113: mlflow.CreateRun.Response.run:type_name -> mlflow.Run
-	26,  // 114: mlflow.UpdateRun.Response.run_info:type_name -> mlflow.RunInfo
-	20,  // 115: mlflow.GetRun.Response.run:type_name -> mlflow.Run
-	20,  // 116: mlflow.SearchRuns.Response.runs:type_name -> mlflow.Run
-	53,  // 117: mlflow.ListArtifacts.Response.files:type_name -> mlflow.FileInfo
-	206, // 118: mlflow.CreatePresignedUploadUrl.Response.headers:type_name -> mlflow.CreatePresignedUploadUrl.Response.HeadersEntry
-	18,  // 119: mlflow.GetMetricHistory.Response.metrics:type_name -> mlflow.Metric
-	55,  // 120: mlflow.GetMetricHistoryBulkInterval.Response.metrics:type_name -> mlflow.MetricWithRunId
-	27,  // 121: mlflow.GetExperimentByName.Response.experiment:type_name -> mlflow.Experiment
-	325, // 122: mlflow.CreateAssessment.Response.assessment:type_name -> assessments.Assessment
-	325, // 123: mlflow.UpdateAssessment.Response.assessment:type_name -> assessments.Assessment
-	325, // 124: mlflow.GetAssessmentRequest.Response.assessment:type_name -> assessments.Assessment
-	66,  // 125: mlflow.StartTrace.Response.trace_info:type_name -> mlflow.TraceInfo
-	66,  // 126: mlflow.EndTrace.Response.trace_info:type_name -> mlflow.TraceInfo
-	66,  // 127: mlflow.GetTraceInfo.Response.trace_info:type_name -> mlflow.TraceInfo
-	89,  // 128: mlflow.GetTraceInfoV3.Response.trace:type_name -> mlflow.Trace
-	89,  // 129: mlflow.BatchGetTraces.Response.traces:type_name -> mlflow.Trace
-	91,  // 130: mlflow.BatchGetTraceInfos.Response.trace_infos:type_name -> mlflow.TraceInfoV3
-	89,  // 131: mlflow.GetTrace.Response.trace:type_name -> mlflow.Trace
-	66,  // 132: mlflow.SearchTraces.Response.traces:type_name -> mlflow.TraceInfo
-	66,  // 133: mlflow.SearchUnifiedTraces.Response.traces:type_name -> mlflow.TraceInfo
-	84,  // 134: mlflow.QueryTraceMetrics.Response.data_points:type_name -> mlflow.MetricDataPoint
-	89,  // 135: mlflow.StartTraceV3.Response.trace:type_name -> mlflow.Trace
-	95,  // 136: mlflow.SearchDatasets.Response.dataset_summaries:type_name -> mlflow.DatasetSummary
-	106, // 137: mlflow.CreateLoggedModel.Response.model:type_name -> mlflow.LoggedModel
-	106, // 138: mlflow.FinalizeLoggedModel.Response.model:type_name -> mlflow.LoggedModel
-	106, // 139: mlflow.GetLoggedModel.Response.model:type_name -> mlflow.LoggedModel
-	106, // 140: mlflow.SearchLoggedModels.Response.models:type_name -> mlflow.LoggedModel
-	106, // 141: mlflow.SetLoggedModelTags.Response.model:type_name -> mlflow.LoggedModel
-	53,  // 142: mlflow.ListLoggedModelArtifacts.Response.files:type_name -> mlflow.FileInfo
-	91,  // 143: mlflow.SearchTracesV3.Response.traces:type_name -> mlflow.TraceInfoV3
-	331, // 144: mlflow.CreateDataset.Response.dataset:type_name -> datasets.Dataset
-	331, // 145: mlflow.GetDataset.Response.dataset:type_name -> datasets.Dataset
-	331, // 146: mlflow.SearchEvaluationDatasets.Response.datasets:type_name -> datasets.Dataset
-	331, // 147: mlflow.SetDatasetTags.Response.dataset:type_name -> datasets.Dataset
-	331, // 148: mlflow.AddDatasetToExperiments.Response.dataset:type_name -> datasets.Dataset
-	331, // 149: mlflow.RemoveDatasetFromExperiments.Response.dataset:type_name -> datasets.Dataset
-	130, // 150: mlflow.ListScorers.Response.scorers:type_name -> mlflow.Scorer
-	130, // 151: mlflow.ListScorerVersions.Response.scorers:type_name -> mlflow.Scorer
-	130, // 152: mlflow.GetScorer.Response.scorer:type_name -> mlflow.Scorer
-	131, // 153: mlflow.CreateGatewaySecret.Response.secret:type_name -> mlflow.GatewaySecretInfo
-	131, // 154: mlflow.GetGatewaySecretInfo.Response.secret:type_name -> mlflow.GatewaySecretInfo
-	131, // 155: mlflow.UpdateGatewaySecret.Response.secret:type_name -> mlflow.GatewaySecretInfo
-	131, // 156: mlflow.ListGatewaySecretInfos.Response.secrets:type_name -> mlflow.GatewaySecretInfo
-	132, // 157: mlflow.CreateGatewayModelDefinition.Response.model_definition:type_name -> mlflow.GatewayModelDefinition
-	132, // 158: mlflow.GetGatewayModelDefinition.Response.model_definition:type_name -> mlflow.GatewayModelDefinition
-	132, // 159: mlflow.ListGatewayModelDefinitions.Response.model_definitions:type_name -> mlflow.GatewayModelDefinition
-	132, // 160: mlflow.UpdateGatewayModelDefinition.Response.model_definition:type_name -> mlflow.GatewayModelDefinition
-	134, // 161: mlflow.CreateGatewayEndpoint.Response.endpoint:type_name -> mlflow.GatewayEndpoint
-	134, // 162: mlflow.GetGatewayEndpoint.Response.endpoint:type_name -> mlflow.GatewayEndpoint
-	134, // 163: mlflow.UpdateGatewayEndpoint.Response.endpoint:type_name -> mlflow.GatewayEndpoint
-	134, // 164: mlflow.ListGatewayEndpoints.Response.endpoints:type_name -> mlflow.GatewayEndpoint
-	133, // 165: mlflow.AttachModelToGatewayEndpoint.Response.mapping:type_name -> mlflow.GatewayEndpointModelMapping
-	136, // 166: mlflow.CreateGatewayEndpointBinding.Response.binding:type_name -> mlflow.GatewayEndpointBinding
-	136, // 167: mlflow.ListGatewayEndpointBindings.Response.bindings:type_name -> mlflow.GatewayEndpointBinding
-	162, // 168: mlflow.CreateGatewayBudgetPolicy.Response.budget_policy:type_name -> mlflow.GatewayBudgetPolicy
-	162, // 169: mlflow.GetGatewayBudgetPolicy.Response.budget_policy:type_name -> mlflow.GatewayBudgetPolicy
-	162, // 170: mlflow.UpdateGatewayBudgetPolicy.Response.budget_policy:type_name -> mlflow.GatewayBudgetPolicy
-	162, // 171: mlflow.ListGatewayBudgetPolicies.Response.budget_policies:type_name -> mlflow.GatewayBudgetPolicy
-	309, // 172: mlflow.ListGatewayBudgetWindows.Response.windows:type_name -> mlflow.ListGatewayBudgetWindows.BudgetWindow
-	169, // 173: mlflow.CreateGatewayGuardrail.Response.guardrail:type_name -> mlflow.GatewayGuardrail
-	169, // 174: mlflow.GetGatewayGuardrail.Response.guardrail:type_name -> mlflow.GatewayGuardrail
-	169, // 175: mlflow.ListGatewayGuardrails.Response.guardrails:type_name -> mlflow.GatewayGuardrail
-	170, // 176: mlflow.AddGuardrailToEndpoint.Response.config:type_name -> mlflow.GatewayGuardrailConfig
-	170, // 177: mlflow.ListEndpointGuardrailConfigs.Response.configs:type_name -> mlflow.GatewayGuardrailConfig
-	170, // 178: mlflow.UpdateEndpointGuardrailConfig.Response.config:type_name -> mlflow.GatewayGuardrailConfig
-	180, // 179: mlflow.ListWorkspaces.Response.workspaces:type_name -> mlflow.Workspace
-	180, // 180: mlflow.CreateWorkspace.Response.workspace:type_name -> mlflow.Workspace
-	180, // 181: mlflow.GetWorkspace.Response.workspace:type_name -> mlflow.Workspace
-	180, // 182: mlflow.UpdateWorkspace.Response.workspace:type_name -> mlflow.Workspace
-	61,  // 183: mlflow.MlflowService.getExperimentByName:input_type -> mlflow.GetExperimentByName
-	33,  // 184: mlflow.MlflowService.createExperiment:input_type -> mlflow.CreateExperiment
-	34,  // 185: mlflow.MlflowService.searchExperiments:input_type -> mlflow.SearchExperiments
-	35,  // 186: mlflow.MlflowService.getExperiment:input_type -> mlflow.GetExperiment
-	36,  // 187: mlflow.MlflowService.deleteExperiment:input_type -> mlflow.DeleteExperiment
-	37,  // 188: mlflow.MlflowService.restoreExperiment:input_type -> mlflow.RestoreExperiment
-	38,  // 189: mlflow.MlflowService.updateExperiment:input_type -> mlflow.UpdateExperiment
-	39,  // 190: mlflow.MlflowService.createRun:input_type -> mlflow.CreateRun
-	40,  // 191: mlflow.MlflowService.updateRun:input_type -> mlflow.UpdateRun
-	41,  // 192: mlflow.MlflowService.deleteRun:input_type -> mlflow.DeleteRun
-	42,  // 193: mlflow.MlflowService.restoreRun:input_type -> mlflow.RestoreRun
-	43,  // 194: mlflow.MlflowService.logMetric:input_type -> mlflow.LogMetric
-	44,  // 195: mlflow.MlflowService.logParam:input_type -> mlflow.LogParam
-	45,  // 196: mlflow.MlflowService.setExperimentTag:input_type -> mlflow.SetExperimentTag
-	46,  // 197: mlflow.MlflowService.deleteExperimentTag:input_type -> mlflow.DeleteExperimentTag
-	47,  // 198: mlflow.MlflowService.setTag:input_type -> mlflow.SetTag
-	85,  // 199: mlflow.MlflowService.setTraceTag:input_type -> mlflow.SetTraceTag
-	86,  // 200: mlflow.MlflowService.setTraceTagV3:input_type -> mlflow.SetTraceTagV3
-	87,  // 201: mlflow.MlflowService.deleteTraceTag:input_type -> mlflow.DeleteTraceTag
-	88,  // 202: mlflow.MlflowService.deleteTraceTagV3:input_type -> mlflow.DeleteTraceTagV3
-	48,  // 203: mlflow.MlflowService.deleteTag:input_type -> mlflow.DeleteTag
-	49,  // 204: mlflow.MlflowService.getRun:input_type -> mlflow.GetRun
-	50,  // 205: mlflow.MlflowService.searchRuns:input_type -> mlflow.SearchRuns
-	51,  // 206: mlflow.MlflowService.listArtifacts:input_type -> mlflow.ListArtifacts
-	52,  // 207: mlflow.MlflowService.createPresignedUploadUrl:input_type -> mlflow.CreatePresignedUploadUrl
-	54,  // 208: mlflow.MlflowService.getMetricHistory:input_type -> mlflow.GetMetricHistory
-	56,  // 209: mlflow.MlflowService.getMetricHistoryBulkInterval:input_type -> mlflow.GetMetricHistoryBulkInterval
-	57,  // 210: mlflow.MlflowService.logBatch:input_type -> mlflow.LogBatch
-	58,  // 211: mlflow.MlflowService.logModel:input_type -> mlflow.LogModel
-	59,  // 212: mlflow.MlflowService.logInputs:input_type -> mlflow.LogInputs
-	60,  // 213: mlflow.MlflowService.logOutputs:input_type -> mlflow.LogOutputs
-	96,  // 214: mlflow.MlflowService.searchDatasets:input_type -> mlflow.SearchDatasets
-	69,  // 215: mlflow.MlflowService.startTrace:input_type -> mlflow.StartTrace
-	70,  // 216: mlflow.MlflowService.endTrace:input_type -> mlflow.EndTrace
-	71,  // 217: mlflow.MlflowService.getTraceInfo:input_type -> mlflow.GetTraceInfo
-	72,  // 218: mlflow.MlflowService.getTraceInfoV3:input_type -> mlflow.GetTraceInfoV3
-	75,  // 219: mlflow.MlflowService.getTrace:input_type -> mlflow.GetTrace
-	73,  // 220: mlflow.MlflowService.batchGetTraces:input_type -> mlflow.BatchGetTraces
-	74,  // 221: mlflow.MlflowService.batchGetTraceInfos:input_type -> mlflow.BatchGetTraceInfos
-	76,  // 222: mlflow.MlflowService.searchTraces:input_type -> mlflow.SearchTraces
-	112, // 223: mlflow.MlflowService.searchTracesV3:input_type -> mlflow.SearchTracesV3
-	92,  // 224: mlflow.MlflowService.startTraceV3:input_type -> mlflow.StartTraceV3
-	93,  // 225: mlflow.MlflowService.linkTracesToRun:input_type -> mlflow.LinkTracesToRun
-	94,  // 226: mlflow.MlflowService.linkPromptsToTrace:input_type -> mlflow.LinkPromptsToTrace
-	77,  // 227: mlflow.MlflowService.searchUnifiedTraceHandler:input_type -> mlflow.SearchUnifiedTraces
-	78,  // 228: mlflow.MlflowService.getOnlineTraceDetails:input_type -> mlflow.GetOnlineTraceDetails
-	79,  // 229: mlflow.MlflowService.deleteTraces:input_type -> mlflow.DeleteTraces
-	80,  // 230: mlflow.MlflowService.deleteTracesV3:input_type -> mlflow.DeleteTracesV3
-	81,  // 231: mlflow.MlflowService.calculateTraceFilterCorrelation:input_type -> mlflow.CalculateTraceFilterCorrelation
-	83,  // 232: mlflow.MlflowService.queryTraceMetrics:input_type -> mlflow.QueryTraceMetrics
-	181, // 233: mlflow.MlflowService.listWorkspaces:input_type -> mlflow.ListWorkspaces
-	182, // 234: mlflow.MlflowService.createWorkspace:input_type -> mlflow.CreateWorkspace
-	183, // 235: mlflow.MlflowService.getWorkspace:input_type -> mlflow.GetWorkspace
-	184, // 236: mlflow.MlflowService.updateWorkspace:input_type -> mlflow.UpdateWorkspace
-	185, // 237: mlflow.MlflowService.deleteWorkspace:input_type -> mlflow.DeleteWorkspace
-	97,  // 238: mlflow.MlflowService.createLoggedModel:input_type -> mlflow.CreateLoggedModel
-	98,  // 239: mlflow.MlflowService.finalizeLoggedModel:input_type -> mlflow.FinalizeLoggedModel
-	99,  // 240: mlflow.MlflowService.getLoggedModel:input_type -> mlflow.GetLoggedModel
-	100, // 241: mlflow.MlflowService.deleteLoggedModel:input_type -> mlflow.DeleteLoggedModel
-	101, // 242: mlflow.MlflowService.searchLoggedModels:input_type -> mlflow.SearchLoggedModels
-	102, // 243: mlflow.MlflowService.setLoggedModelTags:input_type -> mlflow.SetLoggedModelTags
-	103, // 244: mlflow.MlflowService.deleteLoggedModelTag:input_type -> mlflow.DeleteLoggedModelTag
-	104, // 245: mlflow.MlflowService.listLoggedModelArtifacts:input_type -> mlflow.ListLoggedModelArtifacts
-	105, // 246: mlflow.MlflowService.LogLoggedModelParams:input_type -> mlflow.LogLoggedModelParamsRequest
-	65,  // 247: mlflow.MlflowService.GetAssessment:input_type -> mlflow.GetAssessmentRequest
-	62,  // 248: mlflow.MlflowService.createAssessment:input_type -> mlflow.CreateAssessment
-	63,  // 249: mlflow.MlflowService.updateAssessment:input_type -> mlflow.UpdateAssessment
-	64,  // 250: mlflow.MlflowService.deleteAssessment:input_type -> mlflow.DeleteAssessment
-	113, // 251: mlflow.MlflowService.createDataset:input_type -> mlflow.CreateDataset
-	114, // 252: mlflow.MlflowService.getDataset:input_type -> mlflow.GetDataset
-	115, // 253: mlflow.MlflowService.deleteDataset:input_type -> mlflow.DeleteDataset
-	116, // 254: mlflow.MlflowService.searchEvaluationDatasets:input_type -> mlflow.SearchEvaluationDatasets
-	117, // 255: mlflow.MlflowService.setDatasetTags:input_type -> mlflow.SetDatasetTags
-	118, // 256: mlflow.MlflowService.deleteDatasetTag:input_type -> mlflow.DeleteDatasetTag
-	119, // 257: mlflow.MlflowService.upsertDatasetRecords:input_type -> mlflow.UpsertDatasetRecords
-	120, // 258: mlflow.MlflowService.getDatasetExperimentIds:input_type -> mlflow.GetDatasetExperimentIds
-	125, // 259: mlflow.MlflowService.registerScorer:input_type -> mlflow.RegisterScorer
-	126, // 260: mlflow.MlflowService.listScorers:input_type -> mlflow.ListScorers
-	127, // 261: mlflow.MlflowService.listScorerVersions:input_type -> mlflow.ListScorerVersions
-	128, // 262: mlflow.MlflowService.getScorer:input_type -> mlflow.GetScorer
-	129, // 263: mlflow.MlflowService.deleteScorer:input_type -> mlflow.DeleteScorer
-	121, // 264: mlflow.MlflowService.getDatasetRecords:input_type -> mlflow.GetDatasetRecords
-	122, // 265: mlflow.MlflowService.deleteDatasetRecords:input_type -> mlflow.DeleteDatasetRecords
-	123, // 266: mlflow.MlflowService.addDatasetToExperiments:input_type -> mlflow.AddDatasetToExperiments
-	124, // 267: mlflow.MlflowService.removeDatasetFromExperiments:input_type -> mlflow.RemoveDatasetFromExperiments
-	137, // 268: mlflow.MlflowService.createGatewaySecret:input_type -> mlflow.CreateGatewaySecret
-	138, // 269: mlflow.MlflowService.getGatewaySecretInfo:input_type -> mlflow.GetGatewaySecretInfo
-	139, // 270: mlflow.MlflowService.updateGatewaySecret:input_type -> mlflow.UpdateGatewaySecret
-	140, // 271: mlflow.MlflowService.deleteGatewaySecret:input_type -> mlflow.DeleteGatewaySecret
-	141, // 272: mlflow.MlflowService.listGatewaySecretInfos:input_type -> mlflow.ListGatewaySecretInfos
-	150, // 273: mlflow.MlflowService.createGatewayEndpoint:input_type -> mlflow.CreateGatewayEndpoint
-	151, // 274: mlflow.MlflowService.getGatewayEndpoint:input_type -> mlflow.GetGatewayEndpoint
-	152, // 275: mlflow.MlflowService.updateGatewayEndpoint:input_type -> mlflow.UpdateGatewayEndpoint
-	153, // 276: mlflow.MlflowService.deleteGatewayEndpoint:input_type -> mlflow.DeleteGatewayEndpoint
-	154, // 277: mlflow.MlflowService.listGatewayEndpoints:input_type -> mlflow.ListGatewayEndpoints
-	142, // 278: mlflow.MlflowService.createGatewayModelDefinition:input_type -> mlflow.CreateGatewayModelDefinition
-	143, // 279: mlflow.MlflowService.getGatewayModelDefinition:input_type -> mlflow.GetGatewayModelDefinition
-	144, // 280: mlflow.MlflowService.listGatewayModelDefinitions:input_type -> mlflow.ListGatewayModelDefinitions
-	145, // 281: mlflow.MlflowService.updateGatewayModelDefinition:input_type -> mlflow.UpdateGatewayModelDefinition
-	146, // 282: mlflow.MlflowService.deleteGatewayModelDefinition:input_type -> mlflow.DeleteGatewayModelDefinition
-	155, // 283: mlflow.MlflowService.attachModelToEndpoint:input_type -> mlflow.AttachModelToGatewayEndpoint
-	156, // 284: mlflow.MlflowService.detachModelFromEndpoint:input_type -> mlflow.DetachModelFromGatewayEndpoint
-	157, // 285: mlflow.MlflowService.createEndpointBinding:input_type -> mlflow.CreateGatewayEndpointBinding
-	158, // 286: mlflow.MlflowService.deleteEndpointBinding:input_type -> mlflow.DeleteGatewayEndpointBinding
-	159, // 287: mlflow.MlflowService.listEndpointBindings:input_type -> mlflow.ListGatewayEndpointBindings
-	160, // 288: mlflow.MlflowService.setGatewayEndpointTag:input_type -> mlflow.SetGatewayEndpointTag
-	161, // 289: mlflow.MlflowService.deleteGatewayEndpointTag:input_type -> mlflow.DeleteGatewayEndpointTag
-	163, // 290: mlflow.MlflowService.createBudgetPolicy:input_type -> mlflow.CreateGatewayBudgetPolicy
-	164, // 291: mlflow.MlflowService.getBudgetPolicy:input_type -> mlflow.GetGatewayBudgetPolicy
-	165, // 292: mlflow.MlflowService.updateBudgetPolicy:input_type -> mlflow.UpdateGatewayBudgetPolicy
-	166, // 293: mlflow.MlflowService.deleteBudgetPolicy:input_type -> mlflow.DeleteGatewayBudgetPolicy
-	167, // 294: mlflow.MlflowService.listBudgetPolicies:input_type -> mlflow.ListGatewayBudgetPolicies
-	168, // 295: mlflow.MlflowService.listBudgetWindows:input_type -> mlflow.ListGatewayBudgetWindows
-	171, // 296: mlflow.MlflowService.createGatewayGuardrail:input_type -> mlflow.CreateGatewayGuardrail
-	172, // 297: mlflow.MlflowService.getGatewayGuardrail:input_type -> mlflow.GetGatewayGuardrail
-	173, // 298: mlflow.MlflowService.deleteGatewayGuardrail:input_type -> mlflow.DeleteGatewayGuardrail
-	174, // 299: mlflow.MlflowService.listGatewayGuardrails:input_type -> mlflow.ListGatewayGuardrails
-	175, // 300: mlflow.MlflowService.addGuardrailToEndpoint:input_type -> mlflow.AddGuardrailToEndpoint
-	176, // 301: mlflow.MlflowService.removeGuardrailFromEndpoint:input_type -> mlflow.RemoveGuardrailFromEndpoint
-	177, // 302: mlflow.MlflowService.listEndpointGuardrailConfigs:input_type -> mlflow.ListEndpointGuardrailConfigs
-	178, // 303: mlflow.MlflowService.updateEndpointGuardrailConfig:input_type -> mlflow.UpdateEndpointGuardrailConfig
-	213, // 304: mlflow.MlflowService.getExperimentByName:output_type -> mlflow.GetExperimentByName.Response
-	186, // 305: mlflow.MlflowService.createExperiment:output_type -> mlflow.CreateExperiment.Response
-	187, // 306: mlflow.MlflowService.searchExperiments:output_type -> mlflow.SearchExperiments.Response
-	188, // 307: mlflow.MlflowService.getExperiment:output_type -> mlflow.GetExperiment.Response
-	189, // 308: mlflow.MlflowService.deleteExperiment:output_type -> mlflow.DeleteExperiment.Response
-	190, // 309: mlflow.MlflowService.restoreExperiment:output_type -> mlflow.RestoreExperiment.Response
-	191, // 310: mlflow.MlflowService.updateExperiment:output_type -> mlflow.UpdateExperiment.Response
-	192, // 311: mlflow.MlflowService.createRun:output_type -> mlflow.CreateRun.Response
-	193, // 312: mlflow.MlflowService.updateRun:output_type -> mlflow.UpdateRun.Response
-	194, // 313: mlflow.MlflowService.deleteRun:output_type -> mlflow.DeleteRun.Response
-	195, // 314: mlflow.MlflowService.restoreRun:output_type -> mlflow.RestoreRun.Response
-	196, // 315: mlflow.MlflowService.logMetric:output_type -> mlflow.LogMetric.Response
-	197, // 316: mlflow.MlflowService.logParam:output_type -> mlflow.LogParam.Response
-	198, // 317: mlflow.MlflowService.setExperimentTag:output_type -> mlflow.SetExperimentTag.Response
-	199, // 318: mlflow.MlflowService.deleteExperimentTag:output_type -> mlflow.DeleteExperimentTag.Response
-	200, // 319: mlflow.MlflowService.setTag:output_type -> mlflow.SetTag.Response
-	234, // 320: mlflow.MlflowService.setTraceTag:output_type -> mlflow.SetTraceTag.Response
-	235, // 321: mlflow.MlflowService.setTraceTagV3:output_type -> mlflow.SetTraceTagV3.Response
-	236, // 322: mlflow.MlflowService.deleteTraceTag:output_type -> mlflow.DeleteTraceTag.Response
-	237, // 323: mlflow.MlflowService.deleteTraceTagV3:output_type -> mlflow.DeleteTraceTagV3.Response
-	201, // 324: mlflow.MlflowService.deleteTag:output_type -> mlflow.DeleteTag.Response
-	202, // 325: mlflow.MlflowService.getRun:output_type -> mlflow.GetRun.Response
-	203, // 326: mlflow.MlflowService.searchRuns:output_type -> mlflow.SearchRuns.Response
-	204, // 327: mlflow.MlflowService.listArtifacts:output_type -> mlflow.ListArtifacts.Response
-	205, // 328: mlflow.MlflowService.createPresignedUploadUrl:output_type -> mlflow.CreatePresignedUploadUrl.Response
-	207, // 329: mlflow.MlflowService.getMetricHistory:output_type -> mlflow.GetMetricHistory.Response
-	208, // 330: mlflow.MlflowService.getMetricHistoryBulkInterval:output_type -> mlflow.GetMetricHistoryBulkInterval.Response
-	209, // 331: mlflow.MlflowService.logBatch:output_type -> mlflow.LogBatch.Response
-	210, // 332: mlflow.MlflowService.logModel:output_type -> mlflow.LogModel.Response
-	211, // 333: mlflow.MlflowService.logInputs:output_type -> mlflow.LogInputs.Response
-	212, // 334: mlflow.MlflowService.logOutputs:output_type -> mlflow.LogOutputs.Response
-	246, // 335: mlflow.MlflowService.searchDatasets:output_type -> mlflow.SearchDatasets.Response
-	218, // 336: mlflow.MlflowService.startTrace:output_type -> mlflow.StartTrace.Response
-	219, // 337: mlflow.MlflowService.endTrace:output_type -> mlflow.EndTrace.Response
-	220, // 338: mlflow.MlflowService.getTraceInfo:output_type -> mlflow.GetTraceInfo.Response
-	221, // 339: mlflow.MlflowService.getTraceInfoV3:output_type -> mlflow.GetTraceInfoV3.Response
-	224, // 340: mlflow.MlflowService.getTrace:output_type -> mlflow.GetTrace.Response
-	222, // 341: mlflow.MlflowService.batchGetTraces:output_type -> mlflow.BatchGetTraces.Response
-	223, // 342: mlflow.MlflowService.batchGetTraceInfos:output_type -> mlflow.BatchGetTraceInfos.Response
-	225, // 343: mlflow.MlflowService.searchTraces:output_type -> mlflow.SearchTraces.Response
-	258, // 344: mlflow.MlflowService.searchTracesV3:output_type -> mlflow.SearchTracesV3.Response
-	242, // 345: mlflow.MlflowService.startTraceV3:output_type -> mlflow.StartTraceV3.Response
-	243, // 346: mlflow.MlflowService.linkTracesToRun:output_type -> mlflow.LinkTracesToRun.Response
-	245, // 347: mlflow.MlflowService.linkPromptsToTrace:output_type -> mlflow.LinkPromptsToTrace.Response
-	226, // 348: mlflow.MlflowService.searchUnifiedTraceHandler:output_type -> mlflow.SearchUnifiedTraces.Response
-	227, // 349: mlflow.MlflowService.getOnlineTraceDetails:output_type -> mlflow.GetOnlineTraceDetails.Response
-	228, // 350: mlflow.MlflowService.deleteTraces:output_type -> mlflow.DeleteTraces.Response
-	229, // 351: mlflow.MlflowService.deleteTracesV3:output_type -> mlflow.DeleteTracesV3.Response
-	230, // 352: mlflow.MlflowService.calculateTraceFilterCorrelation:output_type -> mlflow.CalculateTraceFilterCorrelation.Response
-	231, // 353: mlflow.MlflowService.queryTraceMetrics:output_type -> mlflow.QueryTraceMetrics.Response
-	320, // 354: mlflow.MlflowService.listWorkspaces:output_type -> mlflow.ListWorkspaces.Response
-	321, // 355: mlflow.MlflowService.createWorkspace:output_type -> mlflow.CreateWorkspace.Response
-	322, // 356: mlflow.MlflowService.getWorkspace:output_type -> mlflow.GetWorkspace.Response
-	323, // 357: mlflow.MlflowService.updateWorkspace:output_type -> mlflow.UpdateWorkspace.Response
-	324, // 358: mlflow.MlflowService.deleteWorkspace:output_type -> mlflow.DeleteWorkspace.Response
-	247, // 359: mlflow.MlflowService.createLoggedModel:output_type -> mlflow.CreateLoggedModel.Response
-	248, // 360: mlflow.MlflowService.finalizeLoggedModel:output_type -> mlflow.FinalizeLoggedModel.Response
-	249, // 361: mlflow.MlflowService.getLoggedModel:output_type -> mlflow.GetLoggedModel.Response
-	250, // 362: mlflow.MlflowService.deleteLoggedModel:output_type -> mlflow.DeleteLoggedModel.Response
-	253, // 363: mlflow.MlflowService.searchLoggedModels:output_type -> mlflow.SearchLoggedModels.Response
-	254, // 364: mlflow.MlflowService.setLoggedModelTags:output_type -> mlflow.SetLoggedModelTags.Response
-	255, // 365: mlflow.MlflowService.deleteLoggedModelTag:output_type -> mlflow.DeleteLoggedModelTag.Response
-	256, // 366: mlflow.MlflowService.listLoggedModelArtifacts:output_type -> mlflow.ListLoggedModelArtifacts.Response
-	257, // 367: mlflow.MlflowService.LogLoggedModelParams:output_type -> mlflow.LogLoggedModelParamsRequest.Response
-	217, // 368: mlflow.MlflowService.GetAssessment:output_type -> mlflow.GetAssessmentRequest.Response
-	214, // 369: mlflow.MlflowService.createAssessment:output_type -> mlflow.CreateAssessment.Response
-	215, // 370: mlflow.MlflowService.updateAssessment:output_type -> mlflow.UpdateAssessment.Response
-	216, // 371: mlflow.MlflowService.deleteAssessment:output_type -> mlflow.DeleteAssessment.Response
-	259, // 372: mlflow.MlflowService.createDataset:output_type -> mlflow.CreateDataset.Response
-	260, // 373: mlflow.MlflowService.getDataset:output_type -> mlflow.GetDataset.Response
-	261, // 374: mlflow.MlflowService.deleteDataset:output_type -> mlflow.DeleteDataset.Response
-	262, // 375: mlflow.MlflowService.searchEvaluationDatasets:output_type -> mlflow.SearchEvaluationDatasets.Response
-	263, // 376: mlflow.MlflowService.setDatasetTags:output_type -> mlflow.SetDatasetTags.Response
-	264, // 377: mlflow.MlflowService.deleteDatasetTag:output_type -> mlflow.DeleteDatasetTag.Response
-	265, // 378: mlflow.MlflowService.upsertDatasetRecords:output_type -> mlflow.UpsertDatasetRecords.Response
-	266, // 379: mlflow.MlflowService.getDatasetExperimentIds:output_type -> mlflow.GetDatasetExperimentIds.Response
-	271, // 380: mlflow.MlflowService.registerScorer:output_type -> mlflow.RegisterScorer.Response
-	272, // 381: mlflow.MlflowService.listScorers:output_type -> mlflow.ListScorers.Response
-	273, // 382: mlflow.MlflowService.listScorerVersions:output_type -> mlflow.ListScorerVersions.Response
-	274, // 383: mlflow.MlflowService.getScorer:output_type -> mlflow.GetScorer.Response
-	275, // 384: mlflow.MlflowService.deleteScorer:output_type -> mlflow.DeleteScorer.Response
-	267, // 385: mlflow.MlflowService.getDatasetRecords:output_type -> mlflow.GetDatasetRecords.Response
-	268, // 386: mlflow.MlflowService.deleteDatasetRecords:output_type -> mlflow.DeleteDatasetRecords.Response
-	269, // 387: mlflow.MlflowService.addDatasetToExperiments:output_type -> mlflow.AddDatasetToExperiments.Response
-	270, // 388: mlflow.MlflowService.removeDatasetFromExperiments:output_type -> mlflow.RemoveDatasetFromExperiments.Response
-	280, // 389: mlflow.MlflowService.createGatewaySecret:output_type -> mlflow.CreateGatewaySecret.Response
-	281, // 390: mlflow.MlflowService.getGatewaySecretInfo:output_type -> mlflow.GetGatewaySecretInfo.Response
-	284, // 391: mlflow.MlflowService.updateGatewaySecret:output_type -> mlflow.UpdateGatewaySecret.Response
-	285, // 392: mlflow.MlflowService.deleteGatewaySecret:output_type -> mlflow.DeleteGatewaySecret.Response
-	286, // 393: mlflow.MlflowService.listGatewaySecretInfos:output_type -> mlflow.ListGatewaySecretInfos.Response
-	292, // 394: mlflow.MlflowService.createGatewayEndpoint:output_type -> mlflow.CreateGatewayEndpoint.Response
-	293, // 395: mlflow.MlflowService.getGatewayEndpoint:output_type -> mlflow.GetGatewayEndpoint.Response
-	294, // 396: mlflow.MlflowService.updateGatewayEndpoint:output_type -> mlflow.UpdateGatewayEndpoint.Response
-	295, // 397: mlflow.MlflowService.deleteGatewayEndpoint:output_type -> mlflow.DeleteGatewayEndpoint.Response
-	296, // 398: mlflow.MlflowService.listGatewayEndpoints:output_type -> mlflow.ListGatewayEndpoints.Response
-	287, // 399: mlflow.MlflowService.createGatewayModelDefinition:output_type -> mlflow.CreateGatewayModelDefinition.Response
-	288, // 400: mlflow.MlflowService.getGatewayModelDefinition:output_type -> mlflow.GetGatewayModelDefinition.Response
-	289, // 401: mlflow.MlflowService.listGatewayModelDefinitions:output_type -> mlflow.ListGatewayModelDefinitions.Response
-	290, // 402: mlflow.MlflowService.updateGatewayModelDefinition:output_type -> mlflow.UpdateGatewayModelDefinition.Response
-	291, // 403: mlflow.MlflowService.deleteGatewayModelDefinition:output_type -> mlflow.DeleteGatewayModelDefinition.Response
-	297, // 404: mlflow.MlflowService.attachModelToEndpoint:output_type -> mlflow.AttachModelToGatewayEndpoint.Response
-	298, // 405: mlflow.MlflowService.detachModelFromEndpoint:output_type -> mlflow.DetachModelFromGatewayEndpoint.Response
-	299, // 406: mlflow.MlflowService.createEndpointBinding:output_type -> mlflow.CreateGatewayEndpointBinding.Response
-	300, // 407: mlflow.MlflowService.deleteEndpointBinding:output_type -> mlflow.DeleteGatewayEndpointBinding.Response
-	301, // 408: mlflow.MlflowService.listEndpointBindings:output_type -> mlflow.ListGatewayEndpointBindings.Response
-	302, // 409: mlflow.MlflowService.setGatewayEndpointTag:output_type -> mlflow.SetGatewayEndpointTag.Response
-	303, // 410: mlflow.MlflowService.deleteGatewayEndpointTag:output_type -> mlflow.DeleteGatewayEndpointTag.Response
-	304, // 411: mlflow.MlflowService.createBudgetPolicy:output_type -> mlflow.CreateGatewayBudgetPolicy.Response
-	305, // 412: mlflow.MlflowService.getBudgetPolicy:output_type -> mlflow.GetGatewayBudgetPolicy.Response
-	306, // 413: mlflow.MlflowService.updateBudgetPolicy:output_type -> mlflow.UpdateGatewayBudgetPolicy.Response
-	307, // 414: mlflow.MlflowService.deleteBudgetPolicy:output_type -> mlflow.DeleteGatewayBudgetPolicy.Response
-	308, // 415: mlflow.MlflowService.listBudgetPolicies:output_type -> mlflow.ListGatewayBudgetPolicies.Response
-	310, // 416: mlflow.MlflowService.listBudgetWindows:output_type -> mlflow.ListGatewayBudgetWindows.Response
-	311, // 417: mlflow.MlflowService.createGatewayGuardrail:output_type -> mlflow.CreateGatewayGuardrail.Response
-	312, // 418: mlflow.MlflowService.getGatewayGuardrail:output_type -> mlflow.GetGatewayGuardrail.Response
-	313, // 419: mlflow.MlflowService.deleteGatewayGuardrail:output_type -> mlflow.DeleteGatewayGuardrail.Response
-	314, // 420: mlflow.MlflowService.listGatewayGuardrails:output_type -> mlflow.ListGatewayGuardrails.Response
-	315, // 421: mlflow.MlflowService.addGuardrailToEndpoint:output_type -> mlflow.AddGuardrailToEndpoint.Response
-	316, // 422: mlflow.MlflowService.removeGuardrailFromEndpoint:output_type -> mlflow.RemoveGuardrailFromEndpoint.Response
-	317, // 423: mlflow.MlflowService.listEndpointGuardrailConfigs:output_type -> mlflow.ListEndpointGuardrailConfigs.Response
-	318, // 424: mlflow.MlflowService.updateEndpointGuardrailConfig:output_type -> mlflow.UpdateEndpointGuardrailConfig.Response
-	304, // [304:425] is the sub-list for method output_type
-	183, // [183:304] is the sub-list for method input_type
-	183, // [183:183] is the sub-list for extension type_name
-	183, // [183:183] is the sub-list for extension extendee
-	0,   // [0:183] is the sub-list for field type_name
+	180, // 111: mlflow.Workspace.trace_archival_config:type_name -> mlflow.TraceArchivalConfig
+	180, // 112: mlflow.CreateWorkspace.trace_archival_config:type_name -> mlflow.TraceArchivalConfig
+	180, // 113: mlflow.UpdateWorkspace.trace_archival_config:type_name -> mlflow.TraceArchivalConfig
+	27,  // 114: mlflow.SearchExperiments.Response.experiments:type_name -> mlflow.Experiment
+	27,  // 115: mlflow.GetExperiment.Response.experiment:type_name -> mlflow.Experiment
+	20,  // 116: mlflow.CreateRun.Response.run:type_name -> mlflow.Run
+	26,  // 117: mlflow.UpdateRun.Response.run_info:type_name -> mlflow.RunInfo
+	20,  // 118: mlflow.GetRun.Response.run:type_name -> mlflow.Run
+	20,  // 119: mlflow.SearchRuns.Response.runs:type_name -> mlflow.Run
+	53,  // 120: mlflow.ListArtifacts.Response.files:type_name -> mlflow.FileInfo
+	207, // 121: mlflow.CreatePresignedUploadUrl.Response.headers:type_name -> mlflow.CreatePresignedUploadUrl.Response.HeadersEntry
+	18,  // 122: mlflow.GetMetricHistory.Response.metrics:type_name -> mlflow.Metric
+	55,  // 123: mlflow.GetMetricHistoryBulkInterval.Response.metrics:type_name -> mlflow.MetricWithRunId
+	27,  // 124: mlflow.GetExperimentByName.Response.experiment:type_name -> mlflow.Experiment
+	326, // 125: mlflow.CreateAssessment.Response.assessment:type_name -> assessments.Assessment
+	326, // 126: mlflow.UpdateAssessment.Response.assessment:type_name -> assessments.Assessment
+	326, // 127: mlflow.GetAssessmentRequest.Response.assessment:type_name -> assessments.Assessment
+	66,  // 128: mlflow.StartTrace.Response.trace_info:type_name -> mlflow.TraceInfo
+	66,  // 129: mlflow.EndTrace.Response.trace_info:type_name -> mlflow.TraceInfo
+	66,  // 130: mlflow.GetTraceInfo.Response.trace_info:type_name -> mlflow.TraceInfo
+	89,  // 131: mlflow.GetTraceInfoV3.Response.trace:type_name -> mlflow.Trace
+	89,  // 132: mlflow.BatchGetTraces.Response.traces:type_name -> mlflow.Trace
+	91,  // 133: mlflow.BatchGetTraceInfos.Response.trace_infos:type_name -> mlflow.TraceInfoV3
+	89,  // 134: mlflow.GetTrace.Response.trace:type_name -> mlflow.Trace
+	66,  // 135: mlflow.SearchTraces.Response.traces:type_name -> mlflow.TraceInfo
+	66,  // 136: mlflow.SearchUnifiedTraces.Response.traces:type_name -> mlflow.TraceInfo
+	84,  // 137: mlflow.QueryTraceMetrics.Response.data_points:type_name -> mlflow.MetricDataPoint
+	89,  // 138: mlflow.StartTraceV3.Response.trace:type_name -> mlflow.Trace
+	95,  // 139: mlflow.SearchDatasets.Response.dataset_summaries:type_name -> mlflow.DatasetSummary
+	106, // 140: mlflow.CreateLoggedModel.Response.model:type_name -> mlflow.LoggedModel
+	106, // 141: mlflow.FinalizeLoggedModel.Response.model:type_name -> mlflow.LoggedModel
+	106, // 142: mlflow.GetLoggedModel.Response.model:type_name -> mlflow.LoggedModel
+	106, // 143: mlflow.SearchLoggedModels.Response.models:type_name -> mlflow.LoggedModel
+	106, // 144: mlflow.SetLoggedModelTags.Response.model:type_name -> mlflow.LoggedModel
+	53,  // 145: mlflow.ListLoggedModelArtifacts.Response.files:type_name -> mlflow.FileInfo
+	91,  // 146: mlflow.SearchTracesV3.Response.traces:type_name -> mlflow.TraceInfoV3
+	332, // 147: mlflow.CreateDataset.Response.dataset:type_name -> datasets.Dataset
+	332, // 148: mlflow.GetDataset.Response.dataset:type_name -> datasets.Dataset
+	332, // 149: mlflow.SearchEvaluationDatasets.Response.datasets:type_name -> datasets.Dataset
+	332, // 150: mlflow.SetDatasetTags.Response.dataset:type_name -> datasets.Dataset
+	332, // 151: mlflow.AddDatasetToExperiments.Response.dataset:type_name -> datasets.Dataset
+	332, // 152: mlflow.RemoveDatasetFromExperiments.Response.dataset:type_name -> datasets.Dataset
+	130, // 153: mlflow.ListScorers.Response.scorers:type_name -> mlflow.Scorer
+	130, // 154: mlflow.ListScorerVersions.Response.scorers:type_name -> mlflow.Scorer
+	130, // 155: mlflow.GetScorer.Response.scorer:type_name -> mlflow.Scorer
+	131, // 156: mlflow.CreateGatewaySecret.Response.secret:type_name -> mlflow.GatewaySecretInfo
+	131, // 157: mlflow.GetGatewaySecretInfo.Response.secret:type_name -> mlflow.GatewaySecretInfo
+	131, // 158: mlflow.UpdateGatewaySecret.Response.secret:type_name -> mlflow.GatewaySecretInfo
+	131, // 159: mlflow.ListGatewaySecretInfos.Response.secrets:type_name -> mlflow.GatewaySecretInfo
+	132, // 160: mlflow.CreateGatewayModelDefinition.Response.model_definition:type_name -> mlflow.GatewayModelDefinition
+	132, // 161: mlflow.GetGatewayModelDefinition.Response.model_definition:type_name -> mlflow.GatewayModelDefinition
+	132, // 162: mlflow.ListGatewayModelDefinitions.Response.model_definitions:type_name -> mlflow.GatewayModelDefinition
+	132, // 163: mlflow.UpdateGatewayModelDefinition.Response.model_definition:type_name -> mlflow.GatewayModelDefinition
+	134, // 164: mlflow.CreateGatewayEndpoint.Response.endpoint:type_name -> mlflow.GatewayEndpoint
+	134, // 165: mlflow.GetGatewayEndpoint.Response.endpoint:type_name -> mlflow.GatewayEndpoint
+	134, // 166: mlflow.UpdateGatewayEndpoint.Response.endpoint:type_name -> mlflow.GatewayEndpoint
+	134, // 167: mlflow.ListGatewayEndpoints.Response.endpoints:type_name -> mlflow.GatewayEndpoint
+	133, // 168: mlflow.AttachModelToGatewayEndpoint.Response.mapping:type_name -> mlflow.GatewayEndpointModelMapping
+	136, // 169: mlflow.CreateGatewayEndpointBinding.Response.binding:type_name -> mlflow.GatewayEndpointBinding
+	136, // 170: mlflow.ListGatewayEndpointBindings.Response.bindings:type_name -> mlflow.GatewayEndpointBinding
+	162, // 171: mlflow.CreateGatewayBudgetPolicy.Response.budget_policy:type_name -> mlflow.GatewayBudgetPolicy
+	162, // 172: mlflow.GetGatewayBudgetPolicy.Response.budget_policy:type_name -> mlflow.GatewayBudgetPolicy
+	162, // 173: mlflow.UpdateGatewayBudgetPolicy.Response.budget_policy:type_name -> mlflow.GatewayBudgetPolicy
+	162, // 174: mlflow.ListGatewayBudgetPolicies.Response.budget_policies:type_name -> mlflow.GatewayBudgetPolicy
+	310, // 175: mlflow.ListGatewayBudgetWindows.Response.windows:type_name -> mlflow.ListGatewayBudgetWindows.BudgetWindow
+	169, // 176: mlflow.CreateGatewayGuardrail.Response.guardrail:type_name -> mlflow.GatewayGuardrail
+	169, // 177: mlflow.GetGatewayGuardrail.Response.guardrail:type_name -> mlflow.GatewayGuardrail
+	169, // 178: mlflow.ListGatewayGuardrails.Response.guardrails:type_name -> mlflow.GatewayGuardrail
+	170, // 179: mlflow.AddGuardrailToEndpoint.Response.config:type_name -> mlflow.GatewayGuardrailConfig
+	170, // 180: mlflow.ListEndpointGuardrailConfigs.Response.configs:type_name -> mlflow.GatewayGuardrailConfig
+	170, // 181: mlflow.UpdateEndpointGuardrailConfig.Response.config:type_name -> mlflow.GatewayGuardrailConfig
+	181, // 182: mlflow.ListWorkspaces.Response.workspaces:type_name -> mlflow.Workspace
+	181, // 183: mlflow.CreateWorkspace.Response.workspace:type_name -> mlflow.Workspace
+	181, // 184: mlflow.GetWorkspace.Response.workspace:type_name -> mlflow.Workspace
+	181, // 185: mlflow.UpdateWorkspace.Response.workspace:type_name -> mlflow.Workspace
+	61,  // 186: mlflow.MlflowService.getExperimentByName:input_type -> mlflow.GetExperimentByName
+	33,  // 187: mlflow.MlflowService.createExperiment:input_type -> mlflow.CreateExperiment
+	34,  // 188: mlflow.MlflowService.searchExperiments:input_type -> mlflow.SearchExperiments
+	35,  // 189: mlflow.MlflowService.getExperiment:input_type -> mlflow.GetExperiment
+	36,  // 190: mlflow.MlflowService.deleteExperiment:input_type -> mlflow.DeleteExperiment
+	37,  // 191: mlflow.MlflowService.restoreExperiment:input_type -> mlflow.RestoreExperiment
+	38,  // 192: mlflow.MlflowService.updateExperiment:input_type -> mlflow.UpdateExperiment
+	39,  // 193: mlflow.MlflowService.createRun:input_type -> mlflow.CreateRun
+	40,  // 194: mlflow.MlflowService.updateRun:input_type -> mlflow.UpdateRun
+	41,  // 195: mlflow.MlflowService.deleteRun:input_type -> mlflow.DeleteRun
+	42,  // 196: mlflow.MlflowService.restoreRun:input_type -> mlflow.RestoreRun
+	43,  // 197: mlflow.MlflowService.logMetric:input_type -> mlflow.LogMetric
+	44,  // 198: mlflow.MlflowService.logParam:input_type -> mlflow.LogParam
+	45,  // 199: mlflow.MlflowService.setExperimentTag:input_type -> mlflow.SetExperimentTag
+	46,  // 200: mlflow.MlflowService.deleteExperimentTag:input_type -> mlflow.DeleteExperimentTag
+	47,  // 201: mlflow.MlflowService.setTag:input_type -> mlflow.SetTag
+	85,  // 202: mlflow.MlflowService.setTraceTag:input_type -> mlflow.SetTraceTag
+	86,  // 203: mlflow.MlflowService.setTraceTagV3:input_type -> mlflow.SetTraceTagV3
+	87,  // 204: mlflow.MlflowService.deleteTraceTag:input_type -> mlflow.DeleteTraceTag
+	88,  // 205: mlflow.MlflowService.deleteTraceTagV3:input_type -> mlflow.DeleteTraceTagV3
+	48,  // 206: mlflow.MlflowService.deleteTag:input_type -> mlflow.DeleteTag
+	49,  // 207: mlflow.MlflowService.getRun:input_type -> mlflow.GetRun
+	50,  // 208: mlflow.MlflowService.searchRuns:input_type -> mlflow.SearchRuns
+	51,  // 209: mlflow.MlflowService.listArtifacts:input_type -> mlflow.ListArtifacts
+	52,  // 210: mlflow.MlflowService.createPresignedUploadUrl:input_type -> mlflow.CreatePresignedUploadUrl
+	54,  // 211: mlflow.MlflowService.getMetricHistory:input_type -> mlflow.GetMetricHistory
+	56,  // 212: mlflow.MlflowService.getMetricHistoryBulkInterval:input_type -> mlflow.GetMetricHistoryBulkInterval
+	57,  // 213: mlflow.MlflowService.logBatch:input_type -> mlflow.LogBatch
+	58,  // 214: mlflow.MlflowService.logModel:input_type -> mlflow.LogModel
+	59,  // 215: mlflow.MlflowService.logInputs:input_type -> mlflow.LogInputs
+	60,  // 216: mlflow.MlflowService.logOutputs:input_type -> mlflow.LogOutputs
+	96,  // 217: mlflow.MlflowService.searchDatasets:input_type -> mlflow.SearchDatasets
+	69,  // 218: mlflow.MlflowService.startTrace:input_type -> mlflow.StartTrace
+	70,  // 219: mlflow.MlflowService.endTrace:input_type -> mlflow.EndTrace
+	71,  // 220: mlflow.MlflowService.getTraceInfo:input_type -> mlflow.GetTraceInfo
+	72,  // 221: mlflow.MlflowService.getTraceInfoV3:input_type -> mlflow.GetTraceInfoV3
+	75,  // 222: mlflow.MlflowService.getTrace:input_type -> mlflow.GetTrace
+	73,  // 223: mlflow.MlflowService.batchGetTraces:input_type -> mlflow.BatchGetTraces
+	74,  // 224: mlflow.MlflowService.batchGetTraceInfos:input_type -> mlflow.BatchGetTraceInfos
+	76,  // 225: mlflow.MlflowService.searchTraces:input_type -> mlflow.SearchTraces
+	112, // 226: mlflow.MlflowService.searchTracesV3:input_type -> mlflow.SearchTracesV3
+	92,  // 227: mlflow.MlflowService.startTraceV3:input_type -> mlflow.StartTraceV3
+	93,  // 228: mlflow.MlflowService.linkTracesToRun:input_type -> mlflow.LinkTracesToRun
+	94,  // 229: mlflow.MlflowService.linkPromptsToTrace:input_type -> mlflow.LinkPromptsToTrace
+	77,  // 230: mlflow.MlflowService.searchUnifiedTraceHandler:input_type -> mlflow.SearchUnifiedTraces
+	78,  // 231: mlflow.MlflowService.getOnlineTraceDetails:input_type -> mlflow.GetOnlineTraceDetails
+	79,  // 232: mlflow.MlflowService.deleteTraces:input_type -> mlflow.DeleteTraces
+	80,  // 233: mlflow.MlflowService.deleteTracesV3:input_type -> mlflow.DeleteTracesV3
+	81,  // 234: mlflow.MlflowService.calculateTraceFilterCorrelation:input_type -> mlflow.CalculateTraceFilterCorrelation
+	83,  // 235: mlflow.MlflowService.queryTraceMetrics:input_type -> mlflow.QueryTraceMetrics
+	182, // 236: mlflow.MlflowService.listWorkspaces:input_type -> mlflow.ListWorkspaces
+	183, // 237: mlflow.MlflowService.createWorkspace:input_type -> mlflow.CreateWorkspace
+	184, // 238: mlflow.MlflowService.getWorkspace:input_type -> mlflow.GetWorkspace
+	185, // 239: mlflow.MlflowService.updateWorkspace:input_type -> mlflow.UpdateWorkspace
+	186, // 240: mlflow.MlflowService.deleteWorkspace:input_type -> mlflow.DeleteWorkspace
+	97,  // 241: mlflow.MlflowService.createLoggedModel:input_type -> mlflow.CreateLoggedModel
+	98,  // 242: mlflow.MlflowService.finalizeLoggedModel:input_type -> mlflow.FinalizeLoggedModel
+	99,  // 243: mlflow.MlflowService.getLoggedModel:input_type -> mlflow.GetLoggedModel
+	100, // 244: mlflow.MlflowService.deleteLoggedModel:input_type -> mlflow.DeleteLoggedModel
+	101, // 245: mlflow.MlflowService.searchLoggedModels:input_type -> mlflow.SearchLoggedModels
+	102, // 246: mlflow.MlflowService.setLoggedModelTags:input_type -> mlflow.SetLoggedModelTags
+	103, // 247: mlflow.MlflowService.deleteLoggedModelTag:input_type -> mlflow.DeleteLoggedModelTag
+	104, // 248: mlflow.MlflowService.listLoggedModelArtifacts:input_type -> mlflow.ListLoggedModelArtifacts
+	105, // 249: mlflow.MlflowService.LogLoggedModelParams:input_type -> mlflow.LogLoggedModelParamsRequest
+	65,  // 250: mlflow.MlflowService.GetAssessment:input_type -> mlflow.GetAssessmentRequest
+	62,  // 251: mlflow.MlflowService.createAssessment:input_type -> mlflow.CreateAssessment
+	63,  // 252: mlflow.MlflowService.updateAssessment:input_type -> mlflow.UpdateAssessment
+	64,  // 253: mlflow.MlflowService.deleteAssessment:input_type -> mlflow.DeleteAssessment
+	113, // 254: mlflow.MlflowService.createDataset:input_type -> mlflow.CreateDataset
+	114, // 255: mlflow.MlflowService.getDataset:input_type -> mlflow.GetDataset
+	115, // 256: mlflow.MlflowService.deleteDataset:input_type -> mlflow.DeleteDataset
+	116, // 257: mlflow.MlflowService.searchEvaluationDatasets:input_type -> mlflow.SearchEvaluationDatasets
+	117, // 258: mlflow.MlflowService.setDatasetTags:input_type -> mlflow.SetDatasetTags
+	118, // 259: mlflow.MlflowService.deleteDatasetTag:input_type -> mlflow.DeleteDatasetTag
+	119, // 260: mlflow.MlflowService.upsertDatasetRecords:input_type -> mlflow.UpsertDatasetRecords
+	120, // 261: mlflow.MlflowService.getDatasetExperimentIds:input_type -> mlflow.GetDatasetExperimentIds
+	125, // 262: mlflow.MlflowService.registerScorer:input_type -> mlflow.RegisterScorer
+	126, // 263: mlflow.MlflowService.listScorers:input_type -> mlflow.ListScorers
+	127, // 264: mlflow.MlflowService.listScorerVersions:input_type -> mlflow.ListScorerVersions
+	128, // 265: mlflow.MlflowService.getScorer:input_type -> mlflow.GetScorer
+	129, // 266: mlflow.MlflowService.deleteScorer:input_type -> mlflow.DeleteScorer
+	121, // 267: mlflow.MlflowService.getDatasetRecords:input_type -> mlflow.GetDatasetRecords
+	122, // 268: mlflow.MlflowService.deleteDatasetRecords:input_type -> mlflow.DeleteDatasetRecords
+	123, // 269: mlflow.MlflowService.addDatasetToExperiments:input_type -> mlflow.AddDatasetToExperiments
+	124, // 270: mlflow.MlflowService.removeDatasetFromExperiments:input_type -> mlflow.RemoveDatasetFromExperiments
+	137, // 271: mlflow.MlflowService.createGatewaySecret:input_type -> mlflow.CreateGatewaySecret
+	138, // 272: mlflow.MlflowService.getGatewaySecretInfo:input_type -> mlflow.GetGatewaySecretInfo
+	139, // 273: mlflow.MlflowService.updateGatewaySecret:input_type -> mlflow.UpdateGatewaySecret
+	140, // 274: mlflow.MlflowService.deleteGatewaySecret:input_type -> mlflow.DeleteGatewaySecret
+	141, // 275: mlflow.MlflowService.listGatewaySecretInfos:input_type -> mlflow.ListGatewaySecretInfos
+	150, // 276: mlflow.MlflowService.createGatewayEndpoint:input_type -> mlflow.CreateGatewayEndpoint
+	151, // 277: mlflow.MlflowService.getGatewayEndpoint:input_type -> mlflow.GetGatewayEndpoint
+	152, // 278: mlflow.MlflowService.updateGatewayEndpoint:input_type -> mlflow.UpdateGatewayEndpoint
+	153, // 279: mlflow.MlflowService.deleteGatewayEndpoint:input_type -> mlflow.DeleteGatewayEndpoint
+	154, // 280: mlflow.MlflowService.listGatewayEndpoints:input_type -> mlflow.ListGatewayEndpoints
+	142, // 281: mlflow.MlflowService.createGatewayModelDefinition:input_type -> mlflow.CreateGatewayModelDefinition
+	143, // 282: mlflow.MlflowService.getGatewayModelDefinition:input_type -> mlflow.GetGatewayModelDefinition
+	144, // 283: mlflow.MlflowService.listGatewayModelDefinitions:input_type -> mlflow.ListGatewayModelDefinitions
+	145, // 284: mlflow.MlflowService.updateGatewayModelDefinition:input_type -> mlflow.UpdateGatewayModelDefinition
+	146, // 285: mlflow.MlflowService.deleteGatewayModelDefinition:input_type -> mlflow.DeleteGatewayModelDefinition
+	155, // 286: mlflow.MlflowService.attachModelToEndpoint:input_type -> mlflow.AttachModelToGatewayEndpoint
+	156, // 287: mlflow.MlflowService.detachModelFromEndpoint:input_type -> mlflow.DetachModelFromGatewayEndpoint
+	157, // 288: mlflow.MlflowService.createEndpointBinding:input_type -> mlflow.CreateGatewayEndpointBinding
+	158, // 289: mlflow.MlflowService.deleteEndpointBinding:input_type -> mlflow.DeleteGatewayEndpointBinding
+	159, // 290: mlflow.MlflowService.listEndpointBindings:input_type -> mlflow.ListGatewayEndpointBindings
+	160, // 291: mlflow.MlflowService.setGatewayEndpointTag:input_type -> mlflow.SetGatewayEndpointTag
+	161, // 292: mlflow.MlflowService.deleteGatewayEndpointTag:input_type -> mlflow.DeleteGatewayEndpointTag
+	163, // 293: mlflow.MlflowService.createBudgetPolicy:input_type -> mlflow.CreateGatewayBudgetPolicy
+	164, // 294: mlflow.MlflowService.getBudgetPolicy:input_type -> mlflow.GetGatewayBudgetPolicy
+	165, // 295: mlflow.MlflowService.updateBudgetPolicy:input_type -> mlflow.UpdateGatewayBudgetPolicy
+	166, // 296: mlflow.MlflowService.deleteBudgetPolicy:input_type -> mlflow.DeleteGatewayBudgetPolicy
+	167, // 297: mlflow.MlflowService.listBudgetPolicies:input_type -> mlflow.ListGatewayBudgetPolicies
+	168, // 298: mlflow.MlflowService.listBudgetWindows:input_type -> mlflow.ListGatewayBudgetWindows
+	171, // 299: mlflow.MlflowService.createGatewayGuardrail:input_type -> mlflow.CreateGatewayGuardrail
+	172, // 300: mlflow.MlflowService.getGatewayGuardrail:input_type -> mlflow.GetGatewayGuardrail
+	173, // 301: mlflow.MlflowService.deleteGatewayGuardrail:input_type -> mlflow.DeleteGatewayGuardrail
+	174, // 302: mlflow.MlflowService.listGatewayGuardrails:input_type -> mlflow.ListGatewayGuardrails
+	175, // 303: mlflow.MlflowService.addGuardrailToEndpoint:input_type -> mlflow.AddGuardrailToEndpoint
+	176, // 304: mlflow.MlflowService.removeGuardrailFromEndpoint:input_type -> mlflow.RemoveGuardrailFromEndpoint
+	177, // 305: mlflow.MlflowService.listEndpointGuardrailConfigs:input_type -> mlflow.ListEndpointGuardrailConfigs
+	178, // 306: mlflow.MlflowService.updateEndpointGuardrailConfig:input_type -> mlflow.UpdateEndpointGuardrailConfig
+	214, // 307: mlflow.MlflowService.getExperimentByName:output_type -> mlflow.GetExperimentByName.Response
+	187, // 308: mlflow.MlflowService.createExperiment:output_type -> mlflow.CreateExperiment.Response
+	188, // 309: mlflow.MlflowService.searchExperiments:output_type -> mlflow.SearchExperiments.Response
+	189, // 310: mlflow.MlflowService.getExperiment:output_type -> mlflow.GetExperiment.Response
+	190, // 311: mlflow.MlflowService.deleteExperiment:output_type -> mlflow.DeleteExperiment.Response
+	191, // 312: mlflow.MlflowService.restoreExperiment:output_type -> mlflow.RestoreExperiment.Response
+	192, // 313: mlflow.MlflowService.updateExperiment:output_type -> mlflow.UpdateExperiment.Response
+	193, // 314: mlflow.MlflowService.createRun:output_type -> mlflow.CreateRun.Response
+	194, // 315: mlflow.MlflowService.updateRun:output_type -> mlflow.UpdateRun.Response
+	195, // 316: mlflow.MlflowService.deleteRun:output_type -> mlflow.DeleteRun.Response
+	196, // 317: mlflow.MlflowService.restoreRun:output_type -> mlflow.RestoreRun.Response
+	197, // 318: mlflow.MlflowService.logMetric:output_type -> mlflow.LogMetric.Response
+	198, // 319: mlflow.MlflowService.logParam:output_type -> mlflow.LogParam.Response
+	199, // 320: mlflow.MlflowService.setExperimentTag:output_type -> mlflow.SetExperimentTag.Response
+	200, // 321: mlflow.MlflowService.deleteExperimentTag:output_type -> mlflow.DeleteExperimentTag.Response
+	201, // 322: mlflow.MlflowService.setTag:output_type -> mlflow.SetTag.Response
+	235, // 323: mlflow.MlflowService.setTraceTag:output_type -> mlflow.SetTraceTag.Response
+	236, // 324: mlflow.MlflowService.setTraceTagV3:output_type -> mlflow.SetTraceTagV3.Response
+	237, // 325: mlflow.MlflowService.deleteTraceTag:output_type -> mlflow.DeleteTraceTag.Response
+	238, // 326: mlflow.MlflowService.deleteTraceTagV3:output_type -> mlflow.DeleteTraceTagV3.Response
+	202, // 327: mlflow.MlflowService.deleteTag:output_type -> mlflow.DeleteTag.Response
+	203, // 328: mlflow.MlflowService.getRun:output_type -> mlflow.GetRun.Response
+	204, // 329: mlflow.MlflowService.searchRuns:output_type -> mlflow.SearchRuns.Response
+	205, // 330: mlflow.MlflowService.listArtifacts:output_type -> mlflow.ListArtifacts.Response
+	206, // 331: mlflow.MlflowService.createPresignedUploadUrl:output_type -> mlflow.CreatePresignedUploadUrl.Response
+	208, // 332: mlflow.MlflowService.getMetricHistory:output_type -> mlflow.GetMetricHistory.Response
+	209, // 333: mlflow.MlflowService.getMetricHistoryBulkInterval:output_type -> mlflow.GetMetricHistoryBulkInterval.Response
+	210, // 334: mlflow.MlflowService.logBatch:output_type -> mlflow.LogBatch.Response
+	211, // 335: mlflow.MlflowService.logModel:output_type -> mlflow.LogModel.Response
+	212, // 336: mlflow.MlflowService.logInputs:output_type -> mlflow.LogInputs.Response
+	213, // 337: mlflow.MlflowService.logOutputs:output_type -> mlflow.LogOutputs.Response
+	247, // 338: mlflow.MlflowService.searchDatasets:output_type -> mlflow.SearchDatasets.Response
+	219, // 339: mlflow.MlflowService.startTrace:output_type -> mlflow.StartTrace.Response
+	220, // 340: mlflow.MlflowService.endTrace:output_type -> mlflow.EndTrace.Response
+	221, // 341: mlflow.MlflowService.getTraceInfo:output_type -> mlflow.GetTraceInfo.Response
+	222, // 342: mlflow.MlflowService.getTraceInfoV3:output_type -> mlflow.GetTraceInfoV3.Response
+	225, // 343: mlflow.MlflowService.getTrace:output_type -> mlflow.GetTrace.Response
+	223, // 344: mlflow.MlflowService.batchGetTraces:output_type -> mlflow.BatchGetTraces.Response
+	224, // 345: mlflow.MlflowService.batchGetTraceInfos:output_type -> mlflow.BatchGetTraceInfos.Response
+	226, // 346: mlflow.MlflowService.searchTraces:output_type -> mlflow.SearchTraces.Response
+	259, // 347: mlflow.MlflowService.searchTracesV3:output_type -> mlflow.SearchTracesV3.Response
+	243, // 348: mlflow.MlflowService.startTraceV3:output_type -> mlflow.StartTraceV3.Response
+	244, // 349: mlflow.MlflowService.linkTracesToRun:output_type -> mlflow.LinkTracesToRun.Response
+	246, // 350: mlflow.MlflowService.linkPromptsToTrace:output_type -> mlflow.LinkPromptsToTrace.Response
+	227, // 351: mlflow.MlflowService.searchUnifiedTraceHandler:output_type -> mlflow.SearchUnifiedTraces.Response
+	228, // 352: mlflow.MlflowService.getOnlineTraceDetails:output_type -> mlflow.GetOnlineTraceDetails.Response
+	229, // 353: mlflow.MlflowService.deleteTraces:output_type -> mlflow.DeleteTraces.Response
+	230, // 354: mlflow.MlflowService.deleteTracesV3:output_type -> mlflow.DeleteTracesV3.Response
+	231, // 355: mlflow.MlflowService.calculateTraceFilterCorrelation:output_type -> mlflow.CalculateTraceFilterCorrelation.Response
+	232, // 356: mlflow.MlflowService.queryTraceMetrics:output_type -> mlflow.QueryTraceMetrics.Response
+	321, // 357: mlflow.MlflowService.listWorkspaces:output_type -> mlflow.ListWorkspaces.Response
+	322, // 358: mlflow.MlflowService.createWorkspace:output_type -> mlflow.CreateWorkspace.Response
+	323, // 359: mlflow.MlflowService.getWorkspace:output_type -> mlflow.GetWorkspace.Response
+	324, // 360: mlflow.MlflowService.updateWorkspace:output_type -> mlflow.UpdateWorkspace.Response
+	325, // 361: mlflow.MlflowService.deleteWorkspace:output_type -> mlflow.DeleteWorkspace.Response
+	248, // 362: mlflow.MlflowService.createLoggedModel:output_type -> mlflow.CreateLoggedModel.Response
+	249, // 363: mlflow.MlflowService.finalizeLoggedModel:output_type -> mlflow.FinalizeLoggedModel.Response
+	250, // 364: mlflow.MlflowService.getLoggedModel:output_type -> mlflow.GetLoggedModel.Response
+	251, // 365: mlflow.MlflowService.deleteLoggedModel:output_type -> mlflow.DeleteLoggedModel.Response
+	254, // 366: mlflow.MlflowService.searchLoggedModels:output_type -> mlflow.SearchLoggedModels.Response
+	255, // 367: mlflow.MlflowService.setLoggedModelTags:output_type -> mlflow.SetLoggedModelTags.Response
+	256, // 368: mlflow.MlflowService.deleteLoggedModelTag:output_type -> mlflow.DeleteLoggedModelTag.Response
+	257, // 369: mlflow.MlflowService.listLoggedModelArtifacts:output_type -> mlflow.ListLoggedModelArtifacts.Response
+	258, // 370: mlflow.MlflowService.LogLoggedModelParams:output_type -> mlflow.LogLoggedModelParamsRequest.Response
+	218, // 371: mlflow.MlflowService.GetAssessment:output_type -> mlflow.GetAssessmentRequest.Response
+	215, // 372: mlflow.MlflowService.createAssessment:output_type -> mlflow.CreateAssessment.Response
+	216, // 373: mlflow.MlflowService.updateAssessment:output_type -> mlflow.UpdateAssessment.Response
+	217, // 374: mlflow.MlflowService.deleteAssessment:output_type -> mlflow.DeleteAssessment.Response
+	260, // 375: mlflow.MlflowService.createDataset:output_type -> mlflow.CreateDataset.Response
+	261, // 376: mlflow.MlflowService.getDataset:output_type -> mlflow.GetDataset.Response
+	262, // 377: mlflow.MlflowService.deleteDataset:output_type -> mlflow.DeleteDataset.Response
+	263, // 378: mlflow.MlflowService.searchEvaluationDatasets:output_type -> mlflow.SearchEvaluationDatasets.Response
+	264, // 379: mlflow.MlflowService.setDatasetTags:output_type -> mlflow.SetDatasetTags.Response
+	265, // 380: mlflow.MlflowService.deleteDatasetTag:output_type -> mlflow.DeleteDatasetTag.Response
+	266, // 381: mlflow.MlflowService.upsertDatasetRecords:output_type -> mlflow.UpsertDatasetRecords.Response
+	267, // 382: mlflow.MlflowService.getDatasetExperimentIds:output_type -> mlflow.GetDatasetExperimentIds.Response
+	272, // 383: mlflow.MlflowService.registerScorer:output_type -> mlflow.RegisterScorer.Response
+	273, // 384: mlflow.MlflowService.listScorers:output_type -> mlflow.ListScorers.Response
+	274, // 385: mlflow.MlflowService.listScorerVersions:output_type -> mlflow.ListScorerVersions.Response
+	275, // 386: mlflow.MlflowService.getScorer:output_type -> mlflow.GetScorer.Response
+	276, // 387: mlflow.MlflowService.deleteScorer:output_type -> mlflow.DeleteScorer.Response
+	268, // 388: mlflow.MlflowService.getDatasetRecords:output_type -> mlflow.GetDatasetRecords.Response
+	269, // 389: mlflow.MlflowService.deleteDatasetRecords:output_type -> mlflow.DeleteDatasetRecords.Response
+	270, // 390: mlflow.MlflowService.addDatasetToExperiments:output_type -> mlflow.AddDatasetToExperiments.Response
+	271, // 391: mlflow.MlflowService.removeDatasetFromExperiments:output_type -> mlflow.RemoveDatasetFromExperiments.Response
+	281, // 392: mlflow.MlflowService.createGatewaySecret:output_type -> mlflow.CreateGatewaySecret.Response
+	282, // 393: mlflow.MlflowService.getGatewaySecretInfo:output_type -> mlflow.GetGatewaySecretInfo.Response
+	285, // 394: mlflow.MlflowService.updateGatewaySecret:output_type -> mlflow.UpdateGatewaySecret.Response
+	286, // 395: mlflow.MlflowService.deleteGatewaySecret:output_type -> mlflow.DeleteGatewaySecret.Response
+	287, // 396: mlflow.MlflowService.listGatewaySecretInfos:output_type -> mlflow.ListGatewaySecretInfos.Response
+	293, // 397: mlflow.MlflowService.createGatewayEndpoint:output_type -> mlflow.CreateGatewayEndpoint.Response
+	294, // 398: mlflow.MlflowService.getGatewayEndpoint:output_type -> mlflow.GetGatewayEndpoint.Response
+	295, // 399: mlflow.MlflowService.updateGatewayEndpoint:output_type -> mlflow.UpdateGatewayEndpoint.Response
+	296, // 400: mlflow.MlflowService.deleteGatewayEndpoint:output_type -> mlflow.DeleteGatewayEndpoint.Response
+	297, // 401: mlflow.MlflowService.listGatewayEndpoints:output_type -> mlflow.ListGatewayEndpoints.Response
+	288, // 402: mlflow.MlflowService.createGatewayModelDefinition:output_type -> mlflow.CreateGatewayModelDefinition.Response
+	289, // 403: mlflow.MlflowService.getGatewayModelDefinition:output_type -> mlflow.GetGatewayModelDefinition.Response
+	290, // 404: mlflow.MlflowService.listGatewayModelDefinitions:output_type -> mlflow.ListGatewayModelDefinitions.Response
+	291, // 405: mlflow.MlflowService.updateGatewayModelDefinition:output_type -> mlflow.UpdateGatewayModelDefinition.Response
+	292, // 406: mlflow.MlflowService.deleteGatewayModelDefinition:output_type -> mlflow.DeleteGatewayModelDefinition.Response
+	298, // 407: mlflow.MlflowService.attachModelToEndpoint:output_type -> mlflow.AttachModelToGatewayEndpoint.Response
+	299, // 408: mlflow.MlflowService.detachModelFromEndpoint:output_type -> mlflow.DetachModelFromGatewayEndpoint.Response
+	300, // 409: mlflow.MlflowService.createEndpointBinding:output_type -> mlflow.CreateGatewayEndpointBinding.Response
+	301, // 410: mlflow.MlflowService.deleteEndpointBinding:output_type -> mlflow.DeleteGatewayEndpointBinding.Response
+	302, // 411: mlflow.MlflowService.listEndpointBindings:output_type -> mlflow.ListGatewayEndpointBindings.Response
+	303, // 412: mlflow.MlflowService.setGatewayEndpointTag:output_type -> mlflow.SetGatewayEndpointTag.Response
+	304, // 413: mlflow.MlflowService.deleteGatewayEndpointTag:output_type -> mlflow.DeleteGatewayEndpointTag.Response
+	305, // 414: mlflow.MlflowService.createBudgetPolicy:output_type -> mlflow.CreateGatewayBudgetPolicy.Response
+	306, // 415: mlflow.MlflowService.getBudgetPolicy:output_type -> mlflow.GetGatewayBudgetPolicy.Response
+	307, // 416: mlflow.MlflowService.updateBudgetPolicy:output_type -> mlflow.UpdateGatewayBudgetPolicy.Response
+	308, // 417: mlflow.MlflowService.deleteBudgetPolicy:output_type -> mlflow.DeleteGatewayBudgetPolicy.Response
+	309, // 418: mlflow.MlflowService.listBudgetPolicies:output_type -> mlflow.ListGatewayBudgetPolicies.Response
+	311, // 419: mlflow.MlflowService.listBudgetWindows:output_type -> mlflow.ListGatewayBudgetWindows.Response
+	312, // 420: mlflow.MlflowService.createGatewayGuardrail:output_type -> mlflow.CreateGatewayGuardrail.Response
+	313, // 421: mlflow.MlflowService.getGatewayGuardrail:output_type -> mlflow.GetGatewayGuardrail.Response
+	314, // 422: mlflow.MlflowService.deleteGatewayGuardrail:output_type -> mlflow.DeleteGatewayGuardrail.Response
+	315, // 423: mlflow.MlflowService.listGatewayGuardrails:output_type -> mlflow.ListGatewayGuardrails.Response
+	316, // 424: mlflow.MlflowService.addGuardrailToEndpoint:output_type -> mlflow.AddGuardrailToEndpoint.Response
+	317, // 425: mlflow.MlflowService.removeGuardrailFromEndpoint:output_type -> mlflow.RemoveGuardrailFromEndpoint.Response
+	318, // 426: mlflow.MlflowService.listEndpointGuardrailConfigs:output_type -> mlflow.ListEndpointGuardrailConfigs.Response
+	319, // 427: mlflow.MlflowService.updateEndpointGuardrailConfig:output_type -> mlflow.UpdateEndpointGuardrailConfig.Response
+	307, // [307:428] is the sub-list for method output_type
+	186, // [186:307] is the sub-list for method input_type
+	186, // [186:186] is the sub-list for extension type_name
+	186, // [186:186] is the sub-list for extension extendee
+	0,   // [0:186] is the sub-list for field type_name
 }
 
 func init() { file_service_proto_init() }
@@ -20811,7 +20924,7 @@ func file_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_service_proto_rawDesc), len(file_service_proto_rawDesc)),
 			NumEnums:      18,
-			NumMessages:   307,
+			NumMessages:   308,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

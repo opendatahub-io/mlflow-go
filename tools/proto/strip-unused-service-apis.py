@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Strip issues/prompt-optimization APIs from MLflow service.proto for the Go SDK."""
+"""Strip unused APIs from MLflow service.proto for the Go SDK.
+
+Each group below is stripped because its RPCs reference messages defined in
+proto files that tools/proto/fetch-protos.sh does not vendor (issues.proto,
+prompt_optimization.proto, label_schemas.proto, review_queues.proto). Leaving
+them in makes protoc fail with "is not defined", so keeping an API means
+vendoring its proto and generating a Go package for it.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +14,28 @@ import re
 import sys
 from pathlib import Path
 
+# Imports of proto files the Go SDK does not vendor. Stripped along with every
+# RPC that references them.
+UNVENDORED_IMPORTS = [
+    "issues.proto",
+    "prompt_optimization.proto",
+    "label_schemas.proto",
+    "review_queues.proto",
+]
+
 RPC_NAMES = (
     "createIssue|updateIssue|getIssue|searchIssues|"
     "createPromptOptimizationJob|getPromptOptimizationJob|"
     "searchPromptOptimizationJobs|cancelPromptOptimizationJob|"
-    "deletePromptOptimizationJob"
+    "deletePromptOptimizationJob|"
+    # label_schemas.proto (MLflow 3.13+)
+    "createLabelSchema|getLabelSchema|getLabelSchemaByName|"
+    "listLabelSchemas|updateLabelSchema|deleteLabelSchema|"
+    # review_queues.proto (MLflow 3.13+)
+    "createReviewQueue|getOrCreateUserQueue|getReviewQueue|"
+    "getReviewQueueByName|listReviewQueues|updateReviewQueue|"
+    "deleteReviewQueue|addItemsToReviewQueue|removeItemsFromReviewQueue|"
+    "listReviewQueueItems|setReviewQueueItemStatus"
 )
 
 MESSAGE_NAMES = [
@@ -26,14 +50,17 @@ MESSAGE_NAMES = [
 ]
 
 FORBIDDEN = [
-    'import "issues.proto"',
-    'import "prompt_optimization.proto"',
+    *(f'import "{name}"' for name in UNVENDORED_IMPORTS),
     "PromptOptimizationJob",
     "CreateIssue",
     "createPromptOptimizationJob",
     "Issue RPCs",
     "Prompt Optimization API Messages",
     "prompt optimization job",
+    "mlflow.label_schemas.",
+    "mlflow.review_queues.",
+    "Label Schema RPCs",
+    "Review Queue RPCs",
 ]
 
 
@@ -128,6 +155,8 @@ def cleanup_orphans(text: str) -> str:
     """Remove any leftover headers and collapse blank lines from removals."""
     for orphan in [
         r"\n  // Issue RPCs\n+",
+        r"\n  // Label Schema RPCs\n+",
+        r"\n  // Review Queue RPCs\n+",
         r"\n// ========== Prompt Optimization API Messages ==========+\n+",
     ]:
         text = re.sub(orphan, "\n", text)
@@ -148,8 +177,10 @@ def main() -> int:
     with open(path) as f:
         content = f.read()
 
-    content = re.sub(r'^import "issues\.proto";\n', "", content, flags=re.MULTILINE)
-    content = re.sub(r'^import "prompt_optimization\.proto";\n', "", content, flags=re.MULTILINE)
+    for name in UNVENDORED_IMPORTS:
+        content = re.sub(
+            rf'^import "{re.escape(name)}";\n', "", content, flags=re.MULTILINE
+        )
     content = remove_rpc_blocks(content)
     content = remove_messages(content)
     content = cleanup_orphans(content)
