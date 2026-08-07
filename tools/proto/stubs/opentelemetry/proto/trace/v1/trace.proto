@@ -2,9 +2,14 @@ syntax = "proto3";
 
 package opentelemetry.proto.trace.v1;
 
-option go_package = "github.com/opendatahub-io/mlflow-go/internal/gen/otelpb";
-
-// Stub for opentelemetry trace.proto — only declares types referenced by service.proto.
+// Compile-time-only stub so protoc can resolve the
+// opentelemetry.proto.trace.v1.Span reference in service.proto.
+//
+// No Go code is generated from this file. The Makefile maps this proto path to
+// go.opentelemetry.io/proto/otlp/trace/v1, so the generated service.pb.go uses
+// the official OTel types at runtime. Generating our own package here would
+// register the file path "opentelemetry/proto/trace/v1/trace.proto" a second
+// time and panic any binary that also imports the official OTel protos.
 message Span {
-  string trace_id = 1;
+  bytes trace_id = 1;
 }
