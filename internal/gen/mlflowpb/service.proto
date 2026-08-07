@@ -2537,6 +2537,12 @@ message Experiment {
 
   // Tags: Additional metadata key-value pairs.
   repeated ExperimentTag tags = 7;
+
+  // Effective trace archival retention after broader-scope and experiment overrides are applied.
+  optional string effective_trace_archival_retention = 8;
+
+  // Workspace name of the experiment (Always `default` if workspace is not enabled).
+  optional string workspace = 9;
 }
 
 // DatasetInput. Represents a dataset and input tags.
@@ -4367,10 +4373,11 @@ message RegisterScorer {
   }
 }
 
-// List all scorers for an experiment.
+// List all scorers, optionally scoped to a single experiment.
 message ListScorers {
 
-  // The experiment ID.
+  // The experiment ID. If empty, returns scorers across all experiments
+  // in the active workspace (used by the admin-UI scorer picker).
   optional string experiment_id = 1;
 
   message Response {
@@ -5227,6 +5234,15 @@ message GetSecretsConfig {
 // Workspace Management Messages
 // =============================================================================
 
+// Trace archival settings accepted by workspace APIs and returned in workspace metadata.
+message TraceArchivalConfig {
+  // Optional archival repository root override.
+  optional string location = 1;
+
+  // Optional archival retention override. Format: <int><unit>, for example 30d.
+  optional string retention = 2;
+}
+
 // Workspace metadata returned by workspace APIs.
 message Workspace {
   // The unique workspace name.
@@ -5237,6 +5253,9 @@ message Workspace {
 
   // Optional default artifact root override for this workspace.
   optional string default_artifact_root = 3;
+
+  // Optional trace archival settings for this workspace.
+  optional TraceArchivalConfig trace_archival_config = 4;
 }
 
 // List workspaces available to the current principal.
@@ -5259,6 +5278,9 @@ message CreateWorkspace {
 
   // Optional default artifact root override to apply at creation time.
   optional string default_artifact_root = 3;
+
+  // Optional trace archival settings to apply at creation time.
+  optional TraceArchivalConfig trace_archival_config = 4;
 
   message Response {
     // Metadata describing the created workspace.
@@ -5289,6 +5311,9 @@ message UpdateWorkspace {
 
   // Optional default artifact root override update.
   optional string default_artifact_root = 3;
+
+  // Optional trace archival settings update.
+  optional TraceArchivalConfig trace_archival_config = 4;
 
   message Response {
     // Metadata describing the updated workspace.
