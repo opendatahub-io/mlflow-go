@@ -9,7 +9,7 @@ package mlflowpb
 import (
 	assessmentspb "github.com/opendatahub-io/mlflow-go/internal/gen/assessmentspb"
 	datasetspb "github.com/opendatahub-io/mlflow-go/internal/gen/datasetspb"
-	otelpb "github.com/opendatahub-io/mlflow-go/internal/gen/otelpb"
+	v1 "go.opentelemetry.io/proto/otlp/trace/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
@@ -6038,7 +6038,7 @@ func (x *DeleteTraceTagV3) GetKey() string {
 type Trace struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TraceInfo     *TraceInfoV3           `protobuf:"bytes,1,opt,name=trace_info,json=traceInfo" json:"trace_info,omitempty"`
-	Spans         []*otelpb.Span         `protobuf:"bytes,2,rep,name=spans" json:"spans,omitempty"`
+	Spans         []*v1.Span             `protobuf:"bytes,2,rep,name=spans" json:"spans,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6080,7 +6080,7 @@ func (x *Trace) GetTraceInfo() *TraceInfoV3 {
 	return nil
 }
 
-func (x *Trace) GetSpans() []*otelpb.Span {
+func (x *Trace) GetSpans() []*v1.Span {
 	if x != nil {
 		return x.Spans
 	}
