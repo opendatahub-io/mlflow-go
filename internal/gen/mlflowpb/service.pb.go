@@ -20466,7 +20466,7 @@ var file_service_proto_goTypes = []any{
 	(*DeleteWorkspace_Response)(nil),                // 325: mlflow.DeleteWorkspace.Response
 	(*assessmentspb.Assessment)(nil),                // 326: assessments.Assessment
 	(*fieldmaskpb.FieldMask)(nil),                   // 327: google.protobuf.FieldMask
-	(*v1.Span)(nil),                                 // 328: opentelemetry.proto.trace.v1.Span
+	(*otelpb.Span)(nil),                             // 328: opentelemetry.proto.trace.v1.Span
 	(*timestamppb.Timestamp)(nil),                   // 329: google.protobuf.Timestamp
 	(*durationpb.Duration)(nil),                     // 330: google.protobuf.Duration
 	(datasetspb.DatasetRecordSource_SourceType)(0),  // 331: datasets.DatasetRecordSource.SourceType
