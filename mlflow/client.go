@@ -51,6 +51,9 @@ func NewClient(clientOpts ...Option) (*Client, error) {
 	if opts.trackingURI == "" {
 		opts.trackingURI = os.Getenv("MLFLOW_TRACKING_URI")
 	}
+	if opts.token == "" && opts.tokenPath == "" && !opts.tokenSet && !opts.tokenPathSet && opts.headers["Authorization"] == "" {
+		opts.token = os.Getenv("MLFLOW_TRACKING_TOKEN")
+	}
 	if !opts.insecure {
 		if v := os.Getenv("MLFLOW_INSECURE_SKIP_TLS_VERIFY"); v == "true" || v == "1" {
 			opts.insecure = true
@@ -87,6 +90,8 @@ func NewClient(clientOpts ...Option) (*Client, error) {
 		Logger:     opts.logger,
 		Timeout:    opts.timeout,
 		Insecure:   opts.insecure,
+		Token:      opts.token,
+		TokenPath:  opts.tokenPath,
 	}
 
 	transportClient, err := transport.New(transportCfg)

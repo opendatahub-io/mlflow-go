@@ -1,6 +1,6 @@
 # ADR-0001: Authentication Pattern
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-0011](0011-authentication-hardening.md)
 
 **Date**: 2026-01-14
 

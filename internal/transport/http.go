@@ -34,6 +34,8 @@ type Config struct {
 	Logger     *slog.Logger
 	Timeout    time.Duration
 	Insecure   bool
+	Token      string
+	TokenPath  string
 }
 
 // errorResponse represents the MLflow API error format.
@@ -47,6 +49,12 @@ func New(cfg Config) (*Client, error) {
 	baseURL, err := url.Parse(cfg.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
+	}
+
+	hasAuth := cfg.Token != "" || cfg.TokenPath != ""
+	if cfg.Insecure && hasAuth {
+		return nil, fmt.Errorf("refusing to send credentials over an insecure connection " +
+			"(plain HTTP or TLS verification disabled); remove WithInsecure or the token/token-path option")
 	}
 
 	httpClient := cfg.HTTPClient
@@ -73,7 +81,7 @@ func New(cfg Config) (*Client, error) {
 	return &Client{
 		baseURL:    baseURL,
 		headers:    cfg.Headers,
-		httpClient: httpClient,
+		httpClient: wrapClientWithAuth(httpClient, cfg.Token, cfg.TokenPath, baseURL),
 		logger:     cfg.Logger,
 	}, nil
 }
@@ -456,6 +464,25 @@ func redactAbsoluteURLForLog(absoluteURL string) string {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String()
+}
+
+func wrapClientWithAuth(c *http.Client, token, tokenPath string, trackingURL *url.URL) *http.Client {
+	if token == "" && tokenPath == "" {
+		return c
+	}
+	base := c.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	var rt http.RoundTripper
+	if tokenPath != "" {
+		rt = NewTokenFileRoundTripper(base, tokenPath, trackingURL)
+	} else {
+		rt = NewTokenRoundTripper(base, token, trackingURL)
+	}
+	clone := *c
+	clone.Transport = rt
+	return &clone
 }
 
 func (c *Client) parseError(statusCode int, body []byte) error {

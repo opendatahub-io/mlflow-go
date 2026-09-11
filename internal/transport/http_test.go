@@ -836,3 +836,38 @@ func TestClient_DoAbsoluteGetBody_RedactsPresignedURLInLogs(t *testing.T) {
 		t.Fatalf("expected 1 request log, got %d", requestLogs)
 	}
 }
+
+func TestNew_RejectsInsecureWithToken(t *testing.T) {
+	_, err := New(Config{
+		BaseURL:  "https://mlflow.example.com",
+		Insecure: true,
+		Token:    "secret",
+	})
+	if err == nil {
+		t.Fatal("expected error when Insecure and Token are both set")
+	}
+	if !strings.Contains(err.Error(), "insecure") {
+		t.Errorf("error = %v, want mention of insecure", err)
+	}
+}
+
+func TestNew_RejectsInsecureWithTokenPath(t *testing.T) {
+	_, err := New(Config{
+		BaseURL:   "https://mlflow.example.com",
+		Insecure:  true,
+		TokenPath: "/var/run/secrets/token",
+	})
+	if err == nil {
+		t.Fatal("expected error when Insecure and TokenPath are both set")
+	}
+}
+
+func TestNew_AllowsInsecureWithoutToken(t *testing.T) {
+	_, err := New(Config{
+		BaseURL:  "https://mlflow.example.com",
+		Insecure: true,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v; Insecure without token should be allowed", err)
+	}
+}
