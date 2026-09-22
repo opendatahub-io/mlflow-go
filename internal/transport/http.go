@@ -182,7 +182,10 @@ func (c *Client) buildURL(path string, query url.Values) *url.URL {
 // characters as literals: it trusts the caller to have escaped each path
 // segment.
 func (c *Client) buildEscapedURL(escapedPath string, query url.Values) (*url.URL, error) {
-	rawPath := strings.TrimRight(c.baseURL.Path, "/") + escapedPath
+	// Use the base URL's escaped path so any encoding in the base prefix
+	// (e.g. https://host/api%2Fv1) is preserved rather than decoded into raw
+	// separators when assigned to RawPath below.
+	rawPath := strings.TrimRight(c.baseURL.EscapedPath(), "/") + escapedPath
 	decoded, err := url.PathUnescape(rawPath)
 	if err != nil {
 		return nil, fmt.Errorf("invalid escaped path %q: %w", escapedPath, err)
