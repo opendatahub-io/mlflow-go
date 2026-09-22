@@ -171,13 +171,23 @@ func (c *Client) DoAbsoluteGetBody(ctx context.Context, absoluteURL string, head
 // verbatim. Callers that need a single, already-escaped path segment (e.g. a
 // name containing "/") must use buildEscapedURL instead.
 func (c *Client) buildURL(path string, query url.Values) *url.URL {
-	// Assign Path directly rather than using ResolveReference, which applies
-	// RFC 3986 path normalization (collapsing "." and ".." segments) and would
-	// corrupt storage object paths that contain those literal segments. Clear
-	// RawPath so String() re-derives the escaped form from Path.
+	// Build the escaped request path from the base URL's escaped prefix plus the
+	// escaped literal suffix, then keep it in RawPath. This:
+	//   - preserves any encoding in the base prefix (e.g. https://host/api%2Fv1)
+	//     rather than decoding it to raw separators;
+	//   - encodes reserved characters in path exactly once (literal handling);
+	//   - unlike ResolveReference, does not collapse "." or ".." segments, so
+	//     storage object paths containing them are left intact.
+	rawPath := strings.TrimRight(c.baseURL.EscapedPath(), "/") + (&url.URL{Path: path}).EscapedPath()
+	decoded, err := url.PathUnescape(rawPath)
+	if err != nil {
+		// rawPath is assembled from validly-escaped parts, so this is
+		// unreachable in practice; fall back defensively.
+		decoded = rawPath
+	}
 	u := *c.baseURL
-	u.Path = strings.TrimRight(c.baseURL.Path, "/") + path
-	u.RawPath = ""
+	u.RawPath = rawPath
+	u.Path = decoded
 	u.RawQuery = query.Encode()
 	return &u
 }
