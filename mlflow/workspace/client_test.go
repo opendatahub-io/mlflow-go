@@ -158,6 +158,27 @@ func TestGetWorkspace_EmptyName(t *testing.T) {
 	}
 }
 
+// TestGetWorkspace_EscapesNameSegment verifies the client encodes the name as a
+// single {workspace_name} path segment: reserved characters are escaped and a
+// "/" does not split the path. Mock-only: it drives a fabricated request path.
+func TestGetWorkspace_EscapesNameSegment(t *testing.T) {
+	skipIfLive(t, "asserts the client-constructed request path")
+
+	var gotPath string
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "application/json")
+		mustEncodeJSON(t, w, workspaceJSON("team/a b"))
+	}))
+
+	if _, err := client.GetWorkspace(context.Background(), "team/a b"); err != nil {
+		t.Fatalf("GetWorkspace() error = %v", err)
+	}
+	if want := "/api/3.0/mlflow/workspaces/team%2Fa%20b"; gotPath != want {
+		t.Errorf("request path = %q, want %q", gotPath, want)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // CreateWorkspace
 // ---------------------------------------------------------------------------
@@ -274,6 +295,25 @@ func TestDeleteWorkspace_EmptyName(t *testing.T) {
 	client := newTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	if err := client.DeleteWorkspace(context.Background(), ""); err == nil {
 		t.Error("expected error for empty name")
+	}
+}
+
+// TestDeleteWorkspace_EscapesNameSegment mirrors TestGetWorkspace_EscapesNameSegment
+// for the DELETE path. Mock-only: it drives a fabricated request path.
+func TestDeleteWorkspace_EscapesNameSegment(t *testing.T) {
+	skipIfLive(t, "asserts the client-constructed request path")
+
+	var gotPath string
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	if err := client.DeleteWorkspace(context.Background(), "team/a b"); err != nil {
+		t.Fatalf("DeleteWorkspace() error = %v", err)
+	}
+	if want := "/api/3.0/mlflow/workspaces/team%2Fa%20b"; gotPath != want {
+		t.Errorf("request path = %q, want %q", gotPath, want)
 	}
 }
 
