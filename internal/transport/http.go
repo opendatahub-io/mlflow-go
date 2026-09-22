@@ -263,10 +263,10 @@ func (c *Client) do(ctx context.Context, method string, reqURL *url.URL, body, r
 		)
 	}
 
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
+	// Read response body (bounded by maxResponseBodySize)
+	respBody, err := readResponseBody(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return err
 	}
 
 	// Handle error responses
