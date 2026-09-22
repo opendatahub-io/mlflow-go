@@ -51,8 +51,10 @@ func (c *Client) GetWorkspace(ctx context.Context, name string) (*Workspace, err
 	}
 
 	var resp workspaceResponse
+	// The name is a single path segment ({workspace_name}); escape it here so
+	// reserved characters are encoded once and never split the path.
 	endpoint := "/api/3.0/mlflow/workspaces/" + url.PathEscape(name)
-	if err := c.transport.Get(ctx, endpoint, nil, &resp); err != nil {
+	if err := c.transport.GetEscaped(ctx, endpoint, nil, &resp); err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 	return workspaceFromResponse(&resp), nil
@@ -78,8 +80,9 @@ func (c *Client) DeleteWorkspace(ctx context.Context, name string) error {
 		return fmt.Errorf("mlflow: workspace name is required")
 	}
 
+	// See GetWorkspace: escape the single {workspace_name} path segment.
 	endpoint := "/api/3.0/mlflow/workspaces/" + url.PathEscape(name)
-	if err := c.transport.Delete(ctx, endpoint, nil, nil); err != nil {
+	if err := c.transport.DeleteEscaped(ctx, endpoint, nil, nil); err != nil {
 		return fmt.Errorf("failed to delete workspace: %w", err)
 	}
 

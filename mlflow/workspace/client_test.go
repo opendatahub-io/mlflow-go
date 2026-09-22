@@ -15,9 +15,13 @@ import (
 	"github.com/opendatahub-io/mlflow-go/internal/transport"
 )
 
-// isLive reports whether MLFLOW_TRACKING_URI is set, meaning tests should
-// run against a real MLflow service.
-func isLive() bool { return os.Getenv("MLFLOW_TRACKING_URI") != "" }
+// isLive reports whether tests should run against a real MLflow service.
+// Live mode is opt-in: it requires MLFLOW_RUN_LIVE_TESTS to be set (guarding
+// against `go test ./...` accidentally mutating a server) together with
+// MLFLOW_TRACKING_URI pointing at the target service.
+func isLive() bool {
+	return os.Getenv("MLFLOW_RUN_LIVE_TESTS") != "" && os.Getenv("MLFLOW_TRACKING_URI") != ""
+}
 
 // skipIfLive skips the current test when a live service is configured.
 func skipIfLive(t *testing.T, reason string) {
@@ -27,14 +31,16 @@ func skipIfLive(t *testing.T, reason string) {
 	}
 }
 
-// newTestClient returns a workspace Client. When MLFLOW_TRACKING_URI is set
-// the mock handler is ignored and the client targets the live service;
-// otherwise an httptest.Server is started with the given handler.
+// newTestClient returns a workspace Client. In live mode (see isLive) the mock
+// handler is ignored and the client targets MLFLOW_TRACKING_URI; otherwise an
+// httptest.Server is started with the given handler.
 func newTestClient(t *testing.T, handler http.Handler) *Client {
 	t.Helper()
 
-	baseURL := os.Getenv("MLFLOW_TRACKING_URI")
-	if baseURL == "" {
+	var baseURL string
+	if isLive() {
+		baseURL = os.Getenv("MLFLOW_TRACKING_URI")
+	} else {
 		server := httptest.NewServer(handler)
 		t.Cleanup(server.Close)
 		baseURL = server.URL
