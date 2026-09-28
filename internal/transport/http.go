@@ -550,7 +550,37 @@ func wrapClientWithAuth(c *http.Client, token, tokenPath string, trackingURL *ur
 	}
 	clone := *c
 	clone.Transport = rt
+	clone.CheckRedirect = stripAuthOnCrossOriginRedirect(c.CheckRedirect)
 	return &clone
+}
+
+// stripAuthOnCrossOriginRedirect returns a CheckRedirect that deletes the
+// Authorization header whenever a redirect crosses an exact-origin
+// (scheme+host+port) boundary, then delegates the follow/stop decision to prev.
+//
+// net/http only strips Authorization when the destination host is neither the
+// same host nor a subdomain of the origin, and it ignores scheme and port
+// entirely (see shouldCopyHeaderOnRedirect in net/http/client.go). That leaves
+// a caller-supplied credential able to survive a redirect to a subdomain or to
+// the same host on a different scheme/port. We tighten this so such a credential
+// never leaks to a different exact origin, while genuine same-origin redirects
+// keep it. Direct foreign-origin requests (e.g. presigned object-store URLs) are
+// unaffected because they are not redirects.
+func stripAuthOnCrossOriginRedirect(prev func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) > 0 && requestOrigin(req) != requestOrigin(via[len(via)-1]) {
+			req.Header.Del("Authorization")
+		}
+		if prev != nil {
+			return prev(req, via)
+		}
+		// Replicate net/http's default cap, which only applies when
+		// CheckRedirect is nil; setting our own function opts out of it.
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		return nil
+	}
 }
 
 func (c *Client) parseError(statusCode int, body []byte) error {

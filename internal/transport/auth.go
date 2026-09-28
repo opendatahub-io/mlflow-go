@@ -47,8 +47,9 @@ func (t *tokenRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 	// Foreign-origin requests (e.g. presigned object-store URLs) pass through
 	// untouched, preserving any Authorization the caller set. We never inject our
-	// token on a foreign origin, and Go's stdlib already strips Authorization on
-	// cross-origin redirects, so there is nothing here to strip.
+	// token on a foreign origin; cross-origin redirect leaks are handled at the
+	// client layer by stripAuthOnCrossOriginRedirect, so there is nothing to
+	// strip on a direct request here.
 	return t.base.RoundTrip(r)
 }
 
@@ -75,8 +76,8 @@ func (t *tokenFileRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	if requestOrigin(req) != t.origin {
 		// Foreign-origin requests (e.g. presigned object-store URLs) pass through
 		// untouched, preserving any Authorization the caller set. We never inject
-		// our token on a foreign origin, and Go's stdlib already strips
-		// Authorization on cross-origin redirects.
+		// our token on a foreign origin; cross-origin redirect leaks are handled
+		// at the client layer by stripAuthOnCrossOriginRedirect.
 		return t.base.RoundTrip(req)
 	}
 
