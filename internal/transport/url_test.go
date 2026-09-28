@@ -147,15 +147,27 @@ func TestBuildEscapedURL_WireForm(t *testing.T) {
 	}
 }
 
-// TestGetEscaped_InvalidEscaping ensures a malformed percent-escape is reported
-// as an error rather than silently producing a wrong URL.
+// TestGetEscaped_InvalidEscaping ensures a malformed percent-escape is rejected
+// at URL-build time — returning an error without ever sending a request — rather
+// than silently producing a wrong URL. A real server is used so that a passing
+// result cannot come from an incidental network failure to an unresolved host.
 func TestGetEscaped_InvalidEscaping(t *testing.T) {
-	c, err := New(Config{BaseURL: "http://example.test"})
+	var sawRequest bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawRequest = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := New(Config{BaseURL: srv.URL})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 	if err := c.GetEscaped(context.Background(), "/api/3.0/mlflow/workspaces/%zz", nil, nil); err == nil {
 		t.Error("expected error for invalid percent-escape, got nil")
+	}
+	if sawRequest {
+		t.Error("a request was sent despite the malformed percent-escape")
 	}
 }
 
