@@ -467,3 +467,50 @@ func assertCallerAuthStrippedOnCrossOriginRedirect(t *testing.T, newClient func(
 		t.Errorf("redirect target received Authorization = %q, want empty", dstAuth)
 	}
 }
+
+// End-to-end two-hop redirect: tracking -> dst -> dst (same foreign origin on the
+// second hop). net/http re-copies the initial request's Authorization on every
+// hop, and its sensitive-header strip is port-insensitive, so the second hop
+// (whose origin matches the preceding hop but differs from the initial by port)
+// would leak the caller credential if the check only compared against the
+// preceding hop. The credential must reach neither hop.
+func TestWrapClientWithAuth_StripsCallerAuthAcrossTwoHopRedirect(t *testing.T) {
+	var authSeen []string
+	var dst *httptest.Server
+	dst = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authSeen = append(authSeen, r.Header.Get("Authorization"))
+		if r.URL.Path == "/hop" {
+			http.Redirect(w, r, dst.URL+"/final", http.StatusTemporaryRedirect)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer dst.Close()
+
+	tracking := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, dst.URL+"/hop", http.StatusTemporaryRedirect)
+	}))
+	defer tracking.Close()
+
+	client := wrapClientWithAuth(&http.Client{}, "tracking-token", "", mustParseURL(t, tracking.URL))
+	req, err := http.NewRequest(http.MethodGet, tracking.URL+"/start", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest error: %v", err)
+	}
+	req.Header.Set("Authorization", "SharedKey acct:sig")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	resp.Body.Close()
+
+	if len(authSeen) != 2 {
+		t.Fatalf("foreign origin received %d requests, want 2", len(authSeen))
+	}
+	for i, got := range authSeen {
+		if got != "" {
+			t.Errorf("foreign hop %d received Authorization = %q, want empty", i, got)
+		}
+	}
+}
