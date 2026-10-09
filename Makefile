@@ -2,7 +2,7 @@
 
 # Configuration
 # Also update MLFLOW_VERSION in .github/workflows/go.yaml when changing this
-MLFLOW_VERSION ?= 3.9.0
+MLFLOW_VERSION ?= 3.15.2
 # To run against Red Hat midstream (opendatahub-io/mlflow), use: make dev/up-midstream
 # Change MLFLOW_MIDSTREAM_REF to a tag (e.g., v3.9.0-rh1) when available
 MLFLOW_MIDSTREAM_REF ?= master
@@ -14,8 +14,9 @@ LOCALBIN ?= $(shell pwd)/bin
 UV ?= $(LOCALBIN)/uv
 PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.1.6
-PROTOC_GEN_GO_VERSION ?= v1.36.11
+# Keep this on the newest release supported by the Go toolchain in go.mod.
+GOLANGCI_LINT_VERSION ?= v2.14.0
+PROTOC_GEN_GO_VERSION ?= v1.36.12
 
 # PostgreSQL configuration
 POSTGRES_CONTAINER ?= mlflow-postgres
@@ -23,7 +24,9 @@ POSTGRES_PORT ?= 5432
 POSTGRES_USER ?= mlflow
 POSTGRES_PASSWORD ?= mlflow
 POSTGRES_DB ?= mlflow
-POSTGRES_URI ?= postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
+# Select psycopg2 explicitly: SQLAlchemy 2.1 defaults to psycopg 3, whose
+# typed string binds break MLflow's integer model-version comparisons.
+POSTGRES_URI ?= postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/$(POSTGRES_DB)
 
 # Help target
 help:
@@ -328,7 +331,7 @@ test/integration-ci-postgres: $(UV)
 	@$(UV) run --with "$(MLFLOW_WITH)" --with psycopg2-binary mlflow server \
 		--host 127.0.0.1 \
 		--port $(MLFLOW_TEST_PORT) \
-		--backend-store-uri postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(MLFLOW_TEST_POSTGRES_PORT)/$(POSTGRES_DB) &
+		--backend-store-uri "postgresql+psycopg2://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:$(MLFLOW_TEST_POSTGRES_PORT)/$(POSTGRES_DB)" &
 	@echo "Waiting for MLflow to be ready..."
 	@READY=0; for i in $$(seq 1 30); do \
 		if curl -s http://localhost:$(MLFLOW_TEST_PORT)/health > /dev/null 2>&1; then \
