@@ -254,6 +254,9 @@ func TestPromptVersion_ModelConfigIsolation(t *testing.T) {
 						Template:    "Hello, {{name}}!",
 						ModelConfig: newTestModelConfig(),
 					}
+					if _, err := json.Marshal(original.ModelConfig); err != nil {
+						t.Fatalf("test configuration is not JSON-serializable: %v", err)
+					}
 					clone, err := transform.apply(original)
 					if err != nil {
 						t.Fatalf("%s() error = %v", transform.name, err)
@@ -276,6 +279,18 @@ func TestPromptVersion_ModelConfigIsolation(t *testing.T) {
 	}
 }
 
+type testExtraParamsMap map[string][]string
+
+type testExtraParamsSlice []map[string]string
+
+type testExtraParamsPointer *testExtraParamsObject
+
+type testExtraParamsObject struct {
+	Stops []string
+	// Unexported fields must be preserved without reflection panics.
+	label string
+}
+
 func newTestModelConfig() *PromptModelConfig {
 	temperature, topP, frequencyPenalty, presencePenalty := 0.7, 0.9, 0.1, 0.2
 	maxTokens, topK := 1024, 40
@@ -295,18 +310,34 @@ func newTestModelConfig() *PromptModelConfig {
 				"object": map[string]any{"value": "original"},
 				"array":  []any{"original", map[string]any{"value": "original"}, []any{"original"}},
 			},
-			"array":      []any{map[string]any{"value": "original"}, []any{"original"}},
-			"int":        int(42),
-			"int64":      int64(42),
-			"float32":    float32(0.5),
-			"float64":    float64(0.5),
-			"jsonNumber": json.Number("42"),
-			"bool":       true,
-			"nil":        nil,
-			"nilMap":     map[string]any(nil),
-			"nilArray":   []any(nil),
-			"emptyMap":   map[string]any{},
-			"emptyArray": []any{},
+			"array":           []any{map[string]any{"value": "original"}, []any{"original"}},
+			"stop":            []string{"END"},
+			"labels":          map[string]string{"key": "original"},
+			"raw":             json.RawMessage(`{"value":"original"}`),
+			"typedMap":        testExtraParamsMap{"stop": {"END"}},
+			"typedSlice":      testExtraParamsSlice{{"key": "original"}},
+			"nestedTyped":     []any{map[string][]map[string][]string{"values": {{"stop": {"END"}}}}},
+			"fixedArray":      [1]map[string]string{{"key": "original"}},
+			"options":         &testExtraParamsObject{Stops: []string{"END"}, label: "original"},
+			"namedPointer":    testExtraParamsPointer(&testExtraParamsObject{Stops: []string{"END"}, label: "original"}),
+			"int":             int(42),
+			"int64":           int64(42),
+			"float32":         float32(0.5),
+			"float64":         float64(0.5),
+			"jsonNumber":      json.Number("42"),
+			"bool":            true,
+			"nil":             nil,
+			"nilMap":          map[string]any(nil),
+			"nilArray":        []any(nil),
+			"emptyMap":        map[string]any{},
+			"emptyArray":      []any{},
+			"nilTypedMap":     testExtraParamsMap(nil),
+			"nilTypedSlice":   testExtraParamsSlice(nil),
+			"emptyTypedMap":   testExtraParamsMap{},
+			"emptyTypedSlice": testExtraParamsSlice{},
+			"nilRaw":          json.RawMessage(nil),
+			"emptyBytes":      []byte{},
+			"nilPointer":      (*testExtraParamsObject)(nil),
 		},
 	}
 }
@@ -330,6 +361,15 @@ func mutateTestModelConfig(cfg *PromptModelConfig) {
 	array = cfg.ExtraParams["array"].([]any)
 	array[0].(map[string]any)["value"] = "modified"
 	array[1].([]any)[0] = "modified"
+	cfg.ExtraParams["stop"].([]string)[0] = "modified"
+	cfg.ExtraParams["labels"].(map[string]string)["key"] = "modified"
+	cfg.ExtraParams["raw"].(json.RawMessage)[0] = '['
+	cfg.ExtraParams["typedMap"].(testExtraParamsMap)["stop"][0] = "modified"
+	cfg.ExtraParams["typedSlice"].(testExtraParamsSlice)[0]["key"] = "modified"
+	cfg.ExtraParams["nestedTyped"].([]any)[0].(map[string][]map[string][]string)["values"][0]["stop"][0] = "modified"
+	cfg.ExtraParams["fixedArray"].([1]map[string]string)[0]["key"] = "modified"
+	cfg.ExtraParams["options"].(*testExtraParamsObject).Stops[0] = "modified"
+	cfg.ExtraParams["namedPointer"].(testExtraParamsPointer).Stops[0] = "modified"
 }
 
 func TestPromptVersion_Clone_NilAndEmptyModelConfigFields(t *testing.T) {

@@ -19,6 +19,7 @@ package promptregistry
 
 import (
 	"maps"
+	"reflect"
 	"time"
 )
 
@@ -181,25 +182,61 @@ func clonePointer[T any](value *T) *T {
 	return &clone
 }
 
-// cloneJSONValue copies JSON maps and arrays without converting scalar types.
+// cloneJSONValue copies JSON-serializable containers without converting their types.
+// Values are expected to be acyclic, as required by encoding/json.
 func cloneJSONValue(value any) any {
-	switch value := value.(type) {
-	case map[string]any:
-		if value == nil {
+	if value == nil {
+		return nil
+	}
+	return cloneJSONReflectValue(reflect.ValueOf(value)).Interface()
+}
+
+func cloneJSONReflectValue(value reflect.Value) reflect.Value {
+	switch value.Kind() {
+	case reflect.Interface, reflect.Pointer:
+		if value.IsNil() {
 			return value
 		}
-		clone := make(map[string]any, len(value))
-		for key, item := range value {
-			clone[key] = cloneJSONValue(item)
+		clone := reflect.New(value.Type()).Elem()
+		if value.Kind() == reflect.Pointer {
+			clone.Set(reflect.New(value.Type().Elem()))
+			clone.Elem().Set(cloneJSONReflectValue(value.Elem()))
+		} else {
+			clone.Set(cloneJSONReflectValue(value.Elem()))
 		}
 		return clone
-	case []any:
-		if value == nil {
+	case reflect.Map:
+		if value.IsNil() {
 			return value
 		}
-		clone := make([]any, len(value))
-		for i, item := range value {
-			clone[i] = cloneJSONValue(item)
+		clone := reflect.MakeMapWithSize(value.Type(), value.Len())
+		iter := value.MapRange()
+		for iter.Next() {
+			clone.SetMapIndex(iter.Key(), cloneJSONReflectValue(iter.Value()))
+		}
+		return clone
+	case reflect.Slice, reflect.Array:
+		var clone reflect.Value
+		if value.Kind() == reflect.Slice {
+			if value.IsNil() {
+				return value
+			}
+			clone = reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		} else {
+			clone = reflect.New(value.Type()).Elem()
+		}
+		for i := 0; i < value.Len(); i++ {
+			clone.Index(i).Set(cloneJSONReflectValue(value.Index(i)))
+		}
+		return clone
+	case reflect.Struct:
+		clone := reflect.New(value.Type()).Elem()
+		clone.Set(value)
+		for i := 0; i < value.NumField(); i++ {
+			// Leave unexported state untouched, just as encoding/json does.
+			if clone.Field(i).CanSet() {
+				clone.Field(i).Set(cloneJSONReflectValue(value.Field(i)))
+			}
 		}
 		return clone
 	default:
