@@ -241,7 +241,8 @@ func cloneJSONReflectValue(value reflect.Value, seen map[jsonCloneVisit]reflect.
 		seen[visit] = clone
 		iter := value.MapRange()
 		for iter.Next() {
-			clone.SetMapIndex(iter.Key(), cloneJSONReflectValue(iter.Value(), seen))
+			key := cloneJSONReflectValue(iter.Key(), seen)
+			clone.SetMapIndex(key, cloneJSONReflectValue(iter.Value(), seen))
 		}
 		return clone
 	case reflect.Slice, reflect.Array:
