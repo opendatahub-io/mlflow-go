@@ -19,6 +19,7 @@ package promptregistry
 
 import (
 	"maps"
+	"reflect"
 	"time"
 )
 
@@ -136,14 +137,17 @@ func (v *PromptVersion) Clone() *PromptVersion {
 
 	if v.ModelConfig != nil {
 		cfg := *v.ModelConfig
+		cfg.Temperature = clonePointer(cfg.Temperature)
+		cfg.MaxTokens = clonePointer(cfg.MaxTokens)
+		cfg.TopP = clonePointer(cfg.TopP)
+		cfg.TopK = clonePointer(cfg.TopK)
+		cfg.FrequencyPenalty = clonePointer(cfg.FrequencyPenalty)
+		cfg.PresencePenalty = clonePointer(cfg.PresencePenalty)
 		if v.ModelConfig.StopSequences != nil {
 			cfg.StopSequences = make([]string, len(v.ModelConfig.StopSequences))
 			copy(cfg.StopSequences, v.ModelConfig.StopSequences)
 		}
-		if v.ModelConfig.ExtraParams != nil {
-			cfg.ExtraParams = make(map[string]any, len(v.ModelConfig.ExtraParams))
-			maps.Copy(cfg.ExtraParams, v.ModelConfig.ExtraParams)
-		}
+		cfg.ExtraParams = cloneExtraParams(v.ModelConfig.ExtraParams)
 		clone.ModelConfig = &cfg
 	}
 
@@ -163,6 +167,113 @@ func (v *PromptVersion) Clone() *PromptVersion {
 	}
 
 	return clone
+}
+
+func clonePointer[T any](value *T) *T {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
+// jsonCloneVisit identifies a reference already copied during one clone operation.
+// Slice dimensions distinguish views that share the same first element.
+type jsonCloneVisit struct {
+	typ      reflect.Type
+	pointer  uintptr
+	length   int
+	capacity int
+}
+
+// cloneExtraParams copies JSON-serializable containers without converting their types.
+// JSON-ignored fields can contain cycles even when the value is JSON-serializable.
+func cloneExtraParams(params map[string]any) map[string]any {
+	if params == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(params))
+	seen := map[jsonCloneVisit]reflect.Value{
+		{typ: reflect.TypeOf(params), pointer: reflect.ValueOf(params).Pointer()}: reflect.ValueOf(clone),
+	}
+	for key, value := range params {
+		if value == nil {
+			clone[key] = nil
+		} else {
+			clone[key] = cloneJSONReflectValue(reflect.ValueOf(value), seen).Interface()
+		}
+	}
+	return clone
+}
+
+func cloneJSONReflectValue(value reflect.Value, seen map[jsonCloneVisit]reflect.Value) reflect.Value {
+	var visit jsonCloneVisit
+	switch value.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice:
+		if value.IsNil() {
+			return value
+		}
+		visit = jsonCloneVisit{typ: value.Type(), pointer: value.Pointer()}
+		if value.Kind() == reflect.Slice {
+			visit.length, visit.capacity = value.Len(), value.Cap()
+		}
+		if clone, ok := seen[visit]; ok {
+			return clone
+		}
+	}
+
+	switch value.Kind() {
+	case reflect.Interface, reflect.Pointer:
+		if value.IsNil() {
+			return value
+		}
+		clone := reflect.New(value.Type()).Elem()
+		if value.Kind() == reflect.Pointer {
+			clone.Set(reflect.New(value.Type().Elem()))
+			seen[visit] = clone
+			clone.Elem().Set(cloneJSONReflectValue(value.Elem(), seen))
+		} else {
+			clone.Set(cloneJSONReflectValue(value.Elem(), seen))
+		}
+		return clone
+	case reflect.Map:
+		clone := reflect.MakeMapWithSize(value.Type(), value.Len())
+		seen[visit] = clone
+		iter := value.MapRange()
+		for iter.Next() {
+			key := cloneJSONReflectValue(iter.Key(), seen)
+			clone.SetMapIndex(key, cloneJSONReflectValue(iter.Value(), seen))
+		}
+		return clone
+	case reflect.Slice, reflect.Array:
+		var clone reflect.Value
+		if value.Kind() == reflect.Slice {
+			clone = reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+			seen[visit] = clone
+		} else {
+			clone = reflect.New(value.Type()).Elem()
+		}
+		for i := 0; i < value.Len(); i++ {
+			clone.Index(i).Set(cloneJSONReflectValue(value.Index(i), seen))
+		}
+		return clone
+	case reflect.Struct:
+		clone := reflect.New(value.Type()).Elem()
+		clone.Set(value)
+		for i := 0; i < clone.NumField(); i++ {
+			field := clone.Field(i)
+			if !field.CanSet() {
+				// JSON marshalers can expose mutable private state (e.g. big.Int).
+				// Open access only to the field slot in our independent struct copy,
+				// never to the source or its pointees, then recursively detach it.
+				field = reflect.NewAt(field.Type(), field.Addr().UnsafePointer()).Elem()
+			}
+			field.Set(cloneJSONReflectValue(field, seen))
+		}
+		return clone
+	default:
+		return value
+	}
 }
 
 // WithTemplate returns a copy with the template replaced.
