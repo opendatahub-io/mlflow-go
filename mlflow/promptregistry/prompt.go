@@ -259,30 +259,19 @@ func cloneJSONReflectValue(value reflect.Value, seen map[jsonCloneVisit]reflect.
 	case reflect.Struct:
 		clone := reflect.New(value.Type()).Elem()
 		clone.Set(value)
-		cloneJSONStructFields(clone, value, seen)
+		for i := 0; i < clone.NumField(); i++ {
+			field := clone.Field(i)
+			if !field.CanSet() {
+				// JSON marshalers can expose mutable private state (e.g. big.Int).
+				// Open access only to the field slot in our independent struct copy,
+				// never to the source or its pointees, then recursively detach it.
+				field = reflect.NewAt(field.Type(), field.Addr().UnsafePointer()).Elem()
+			}
+			field.Set(cloneJSONReflectValue(field, seen))
+		}
 		return clone
 	default:
 		return value
-	}
-}
-
-func cloneJSONStructFields(clone, value reflect.Value, seen map[jsonCloneVisit]reflect.Value) {
-	for i := 0; i < value.NumField(); i++ {
-		switch {
-		case clone.Field(i).CanSet():
-			clone.Field(i).Set(cloneJSONReflectValue(value.Field(i), seen))
-		case value.Type().Field(i).Anonymous && value.Field(i).Kind() == reflect.Struct:
-			// An unexported value embed is not settable, but its exported fields are.
-			// Walk the independent struct copy, preserving its unexported state.
-			cloneJSONStructFields(clone.Field(i), value.Field(i), seen)
-		case value.Type().Field(i).Anonymous && value.Field(i).Kind() == reflect.Pointer:
-			// An unexported pointer embed must be replaced before its promoted fields
-			// can be changed. Only bypass reflection's restriction on the pointer slot
-			// in our addressable struct copy, never on the source or its pointee.
-			field := clone.Field(i)
-			field = reflect.NewAt(field.Type(), field.Addr().UnsafePointer()).Elem()
-			field.Set(cloneJSONReflectValue(field, seen))
-		}
 	}
 }
 
