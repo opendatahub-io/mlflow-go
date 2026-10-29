@@ -136,13 +136,21 @@ func (v *PromptVersion) Clone() *PromptVersion {
 
 	if v.ModelConfig != nil {
 		cfg := *v.ModelConfig
+		cfg.Temperature = clonePointer(cfg.Temperature)
+		cfg.MaxTokens = clonePointer(cfg.MaxTokens)
+		cfg.TopP = clonePointer(cfg.TopP)
+		cfg.TopK = clonePointer(cfg.TopK)
+		cfg.FrequencyPenalty = clonePointer(cfg.FrequencyPenalty)
+		cfg.PresencePenalty = clonePointer(cfg.PresencePenalty)
 		if v.ModelConfig.StopSequences != nil {
 			cfg.StopSequences = make([]string, len(v.ModelConfig.StopSequences))
 			copy(cfg.StopSequences, v.ModelConfig.StopSequences)
 		}
 		if v.ModelConfig.ExtraParams != nil {
 			cfg.ExtraParams = make(map[string]any, len(v.ModelConfig.ExtraParams))
-			maps.Copy(cfg.ExtraParams, v.ModelConfig.ExtraParams)
+			for key, value := range v.ModelConfig.ExtraParams {
+				cfg.ExtraParams[key] = cloneJSONValue(value)
+			}
 		}
 		clone.ModelConfig = &cfg
 	}
@@ -163,6 +171,40 @@ func (v *PromptVersion) Clone() *PromptVersion {
 	}
 
 	return clone
+}
+
+func clonePointer[T any](value *T) *T {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
+// cloneJSONValue copies JSON maps and arrays without converting scalar types.
+func cloneJSONValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		if value == nil {
+			return value
+		}
+		clone := make(map[string]any, len(value))
+		for key, item := range value {
+			clone[key] = cloneJSONValue(item)
+		}
+		return clone
+	case []any:
+		if value == nil {
+			return value
+		}
+		clone := make([]any, len(value))
+		for i, item := range value {
+			clone[i] = cloneJSONValue(item)
+		}
+		return clone
+	default:
+		return value
+	}
 }
 
 // WithTemplate returns a copy with the template replaced.
