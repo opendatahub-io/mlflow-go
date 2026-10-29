@@ -291,10 +291,34 @@ type testExtraParamsObject struct {
 	label string
 }
 
+type testExtraParamsEmbedded struct {
+	testExtraParamsObject
+	Labels map[string]string
+}
+
+type testExtraParamsNestedEmbedded struct {
+	testExtraParamsEmbedded
+}
+
+type testExtraParamsCycle struct {
+	Stops []string
+	Self  *testExtraParamsCycle `json:"-"`
+	Map   map[string]any        `json:"-"`
+	Slice []any                 `json:"-"`
+}
+
 func newTestModelConfig() *PromptModelConfig {
 	temperature, topP, frequencyPenalty, presencePenalty := 0.7, 0.9, 0.1, 0.2
 	maxTokens, topK := 1024, 40
-	return &PromptModelConfig{
+	cycle := &testExtraParamsCycle{
+		Stops: []string{"END"},
+		Map:   map[string]any{"value": "original"},
+		Slice: make([]any, 2),
+	}
+	cycle.Self = cycle
+	cycle.Map["self"] = cycle.Map
+	cycle.Slice[0], cycle.Slice[1] = cycle.Slice, "original"
+	cfg := &PromptModelConfig{
 		Provider:         "openai",
 		ModelName:        "test-model",
 		Temperature:      &temperature,
@@ -310,16 +334,22 @@ func newTestModelConfig() *PromptModelConfig {
 				"object": map[string]any{"value": "original"},
 				"array":  []any{"original", map[string]any{"value": "original"}, []any{"original"}},
 			},
-			"array":           []any{map[string]any{"value": "original"}, []any{"original"}},
-			"stop":            []string{"END"},
-			"labels":          map[string]string{"key": "original"},
-			"raw":             json.RawMessage(`{"value":"original"}`),
-			"typedMap":        testExtraParamsMap{"stop": {"END"}},
-			"typedSlice":      testExtraParamsSlice{{"key": "original"}},
-			"nestedTyped":     []any{map[string][]map[string][]string{"values": {{"stop": {"END"}}}}},
-			"fixedArray":      [1]map[string]string{{"key": "original"}},
-			"options":         &testExtraParamsObject{Stops: []string{"END"}, label: "original"},
-			"namedPointer":    testExtraParamsPointer(&testExtraParamsObject{Stops: []string{"END"}, label: "original"}),
+			"array":        []any{map[string]any{"value": "original"}, []any{"original"}},
+			"stop":         []string{"END"},
+			"labels":       map[string]string{"key": "original"},
+			"raw":          json.RawMessage(`{"value":"original"}`),
+			"typedMap":     testExtraParamsMap{"stop": {"END"}},
+			"typedSlice":   testExtraParamsSlice{{"key": "original"}},
+			"nestedTyped":  []any{map[string][]map[string][]string{"values": {{"stop": {"END"}}}}},
+			"fixedArray":   [1]map[string]string{{"key": "original"}},
+			"options":      &testExtraParamsObject{Stops: []string{"END"}, label: "original"},
+			"namedPointer": testExtraParamsPointer(&testExtraParamsObject{Stops: []string{"END"}, label: "original"}),
+			"embedded": testExtraParamsNestedEmbedded{testExtraParamsEmbedded{
+				testExtraParamsObject: testExtraParamsObject{Stops: []string{"END"}, label: "original"},
+				Labels:                map[string]string{"key": "original"},
+			}},
+			"cycle":           cycle,
+			"cycleAlias":      cycle,
 			"int":             int(42),
 			"int64":           int64(42),
 			"float32":         float32(0.5),
@@ -340,6 +370,8 @@ func newTestModelConfig() *PromptModelConfig {
 			"nilPointer":      (*testExtraParamsObject)(nil),
 		},
 	}
+	cycle.Map["params"] = cfg.ExtraParams
+	return cfg
 }
 
 func mutateTestModelConfig(cfg *PromptModelConfig) {
@@ -370,6 +402,34 @@ func mutateTestModelConfig(cfg *PromptModelConfig) {
 	cfg.ExtraParams["fixedArray"].([1]map[string]string)[0]["key"] = "modified"
 	cfg.ExtraParams["options"].(*testExtraParamsObject).Stops[0] = "modified"
 	cfg.ExtraParams["namedPointer"].(testExtraParamsPointer).Stops[0] = "modified"
+	embedded := cfg.ExtraParams["embedded"].(testExtraParamsNestedEmbedded)
+	embedded.Stops[0] = "modified"
+	embedded.Labels["key"] = "modified"
+	cycle := cfg.ExtraParams["cycle"].(*testExtraParamsCycle)
+	cycle.Self.Stops[0] = "modified"
+	cycle.Map["self"].(map[string]any)["value"] = "modified"
+	cycle.Slice[0].([]any)[1] = "modified"
+}
+
+func TestPromptVersion_Clone_ExtraParamsReferences(t *testing.T) {
+	original := &PromptVersion{ModelConfig: newTestModelConfig()}
+	clone := original.Clone()
+	cycle := clone.ModelConfig.ExtraParams["cycle"].(*testExtraParamsCycle)
+	if cycle == original.ModelConfig.ExtraParams["cycle"].(*testExtraParamsCycle) {
+		t.Fatal("cyclic pointer was not copied")
+	}
+	if cycle.Self != cycle || clone.ModelConfig.ExtraParams["cycleAlias"] != cycle {
+		t.Error("pointer cycles or repeated references were not preserved")
+	}
+	if reflect.ValueOf(cycle.Map["self"]).Pointer() != reflect.ValueOf(cycle.Map).Pointer() {
+		t.Error("map cycle was not preserved")
+	}
+	if reflect.ValueOf(cycle.Map["params"]).Pointer() != reflect.ValueOf(clone.ModelConfig.ExtraParams).Pointer() {
+		t.Error("reference to the ExtraParams map was not preserved")
+	}
+	if &cycle.Slice[0].([]any)[0] != &cycle.Slice[0] {
+		t.Error("slice cycle was not preserved")
+	}
 }
 
 func TestPromptVersion_Clone_NilAndEmptyModelConfigFields(t *testing.T) {

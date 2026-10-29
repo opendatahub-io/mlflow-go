@@ -147,12 +147,7 @@ func (v *PromptVersion) Clone() *PromptVersion {
 			cfg.StopSequences = make([]string, len(v.ModelConfig.StopSequences))
 			copy(cfg.StopSequences, v.ModelConfig.StopSequences)
 		}
-		if v.ModelConfig.ExtraParams != nil {
-			cfg.ExtraParams = make(map[string]any, len(v.ModelConfig.ExtraParams))
-			for key, value := range v.ModelConfig.ExtraParams {
-				cfg.ExtraParams[key] = cloneJSONValue(value)
-			}
-		}
+		cfg.ExtraParams = cloneExtraParams(v.ModelConfig.ExtraParams)
 		clone.ModelConfig = &cfg
 	}
 
@@ -182,16 +177,51 @@ func clonePointer[T any](value *T) *T {
 	return &clone
 }
 
-// cloneJSONValue copies JSON-serializable containers without converting their types.
-// Values are expected to be acyclic, as required by encoding/json.
-func cloneJSONValue(value any) any {
-	if value == nil {
-		return nil
-	}
-	return cloneJSONReflectValue(reflect.ValueOf(value)).Interface()
+// jsonCloneVisit identifies a reference already copied during one clone operation.
+// Slice dimensions distinguish views that share the same first element.
+type jsonCloneVisit struct {
+	typ      reflect.Type
+	pointer  uintptr
+	length   int
+	capacity int
 }
 
-func cloneJSONReflectValue(value reflect.Value) reflect.Value {
+// cloneExtraParams copies JSON-serializable containers without converting their types.
+// JSON-ignored fields can contain cycles even when the value is JSON-serializable.
+func cloneExtraParams(params map[string]any) map[string]any {
+	if params == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(params))
+	seen := map[jsonCloneVisit]reflect.Value{
+		{typ: reflect.TypeOf(params), pointer: reflect.ValueOf(params).Pointer()}: reflect.ValueOf(clone),
+	}
+	for key, value := range params {
+		if value == nil {
+			clone[key] = nil
+		} else {
+			clone[key] = cloneJSONReflectValue(reflect.ValueOf(value), seen).Interface()
+		}
+	}
+	return clone
+}
+
+func cloneJSONReflectValue(value reflect.Value, seen map[jsonCloneVisit]reflect.Value) reflect.Value {
+	var visit jsonCloneVisit
+	switch value.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice:
+		if value.IsNil() {
+			return value
+		}
+		visit = jsonCloneVisit{typ: value.Type(), pointer: value.Pointer()}
+		if value.Kind() == reflect.Slice {
+			visit.length, visit.capacity = value.Len(), value.Cap()
+		}
+		if clone, ok := seen[visit]; ok {
+			return clone
+		}
+	}
+
 	switch value.Kind() {
 	case reflect.Interface, reflect.Pointer:
 		if value.IsNil() {
@@ -200,47 +230,52 @@ func cloneJSONReflectValue(value reflect.Value) reflect.Value {
 		clone := reflect.New(value.Type()).Elem()
 		if value.Kind() == reflect.Pointer {
 			clone.Set(reflect.New(value.Type().Elem()))
-			clone.Elem().Set(cloneJSONReflectValue(value.Elem()))
+			seen[visit] = clone
+			clone.Elem().Set(cloneJSONReflectValue(value.Elem(), seen))
 		} else {
-			clone.Set(cloneJSONReflectValue(value.Elem()))
+			clone.Set(cloneJSONReflectValue(value.Elem(), seen))
 		}
 		return clone
 	case reflect.Map:
-		if value.IsNil() {
-			return value
-		}
 		clone := reflect.MakeMapWithSize(value.Type(), value.Len())
+		seen[visit] = clone
 		iter := value.MapRange()
 		for iter.Next() {
-			clone.SetMapIndex(iter.Key(), cloneJSONReflectValue(iter.Value()))
+			clone.SetMapIndex(iter.Key(), cloneJSONReflectValue(iter.Value(), seen))
 		}
 		return clone
 	case reflect.Slice, reflect.Array:
 		var clone reflect.Value
 		if value.Kind() == reflect.Slice {
-			if value.IsNil() {
-				return value
-			}
 			clone = reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+			seen[visit] = clone
 		} else {
 			clone = reflect.New(value.Type()).Elem()
 		}
 		for i := 0; i < value.Len(); i++ {
-			clone.Index(i).Set(cloneJSONReflectValue(value.Index(i)))
+			clone.Index(i).Set(cloneJSONReflectValue(value.Index(i), seen))
 		}
 		return clone
 	case reflect.Struct:
 		clone := reflect.New(value.Type()).Elem()
 		clone.Set(value)
-		for i := 0; i < value.NumField(); i++ {
-			// Leave unexported state untouched, just as encoding/json does.
-			if clone.Field(i).CanSet() {
-				clone.Field(i).Set(cloneJSONReflectValue(value.Field(i)))
-			}
-		}
+		cloneJSONStructFields(clone, value, seen)
 		return clone
 	default:
 		return value
+	}
+}
+
+func cloneJSONStructFields(clone, value reflect.Value, seen map[jsonCloneVisit]reflect.Value) {
+	for i := 0; i < value.NumField(); i++ {
+		if clone.Field(i).CanSet() {
+			clone.Field(i).Set(cloneJSONReflectValue(value.Field(i), seen))
+		} else if value.Type().Field(i).Anonymous && value.Field(i).Kind() == reflect.Struct {
+			// An unexported value embed is not settable, but its exported fields are.
+			// Walk the independent struct copy, preserving its unexported state.
+			// Do not descend through unsettable pointers: they still alias the source.
+			cloneJSONStructFields(clone.Field(i), value.Field(i), seen)
+		}
 	}
 }
 
