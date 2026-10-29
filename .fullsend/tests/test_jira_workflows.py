@@ -36,7 +36,7 @@ class JiraWorkflowTests(unittest.TestCase):
                         "_normalized_event": {
                             "source": {"system": "jira"},
                             "repo": dispatch.REPOSITORY,
-                            "entity": {"key": f"RHAI-{number}"},
+                            "entity": {"key": f"AISDLC-{number}"},
                         }
                     }
                 ),

@@ -3,16 +3,20 @@
 Fullsend polls Red Hat Jira every 30 minutes for this candidate set:
 
 ```jql
-project = RHAI AND issuetype = Epic AND labels = "fs-integration"
+project = AISDLC AND issuetype = Epic AND labels = "fs-integration"
   AND statusCategory != Done ORDER BY updated DESC
 ```
+
+AISDLC replaces RHAI because the integration account needs access to Jira's
+project-role APIs, which require project administration. The initial smoke-test
+epic was moved to AISDLC. Existing RHAI epics are no longer candidates.
 
 The target is `opendatahub-io/mlflow-go`. There is no fixed issue key. Epics are
 the coding work items; their children supply context, not separate dispatches.
 
 ## Triggering implementation
 
-An RHAI user with a project role named `Developers` or `Administrators` can:
+An AISDLC user with a project role named `Developers` or `Administrators` can:
 
 - Add `fs-integration` to an existing epic to start coding.
 - Comment `/fs-code` on a labeled epic to retry or request a new run.
@@ -23,6 +27,10 @@ or remove and re-add the label with an authorized account. The pinned poller
 synthesizes creation events from current labels and the reporter, which cannot
 establish who added the readiness label. Ordinary comments and other label
 changes do not trigger coding.
+The human triggering work must be different from the account owning
+`JIRA_TOKEN`: the poller classifies its own account as a bot even if it is a
+personal account. Moving an already-labeled epic is not itself a coding trigger;
+use a fresh authorized `/fs-code` comment or label addition after activation.
 The poller excludes its own service account, and the local trigger requires a
 human with `write` or `admin` authorization. Done epics and unlabeled epics are
 excluded. The agent rechecks the live epic before editing code.
@@ -44,13 +52,13 @@ instead of a code change; the agent must not invent a complete implementation.
    `opendatahub-io/mlflow-go`. Use a dedicated Jira service account. The workflow
    fixes the tenant to `https://redhat.atlassian.net`; no Jira URL variable is
    required.
-3. Confirm the account can browse the RHAI epics, comments, and child issues,
+3. Confirm the account can browse the AISDLC epics, comments, and child issues,
    including issue-security restrictions, and that the organization permits
    API-token access. Unlike a read-only connection check, polling writes Jira
    issue properties for locks and checkpoints. The pinned poller documents
    Developers and Administrators project roles for its service account so it
    can coordinate polls and inspect command authors' role membership.
-4. Confirm RHAI's role names and membership with its administrators. The poller
+4. Confirm AISDLC's role names and membership with its administrators. The poller
    maps `Developers` to `write` and `Administrators` to `admin`; custom role
    names do not imply write access. This authorization uses Jira membership,
    not membership in the GitHub repository.
@@ -58,8 +66,8 @@ instead of a code change; the agent must not invent a complete implementation.
    [implementation issue #45](https://github.com/opendatahub-io/mlflow-go/issues/45),
    then merge to `main`. Both workflows reject manual runs on other branches and
    fork repositories. Polling checks out the run’s exact `github.sha`.
-6. Add the label to a small, well-scoped RHAI epic, then run **Actions → Fullsend
-   RHAI epic coding → Run workflow**, or wait for the scheduled poll. Verify the
+6. Add the label to a small, well-scoped AISDLC epic, then run **Actions → Fullsend
+   AISDLC epic coding → Run workflow**, or wait for the scheduled poll. Verify the
    poll dispatches `code`, the sandbox reads Jira, and a linked GitHub PR is
    created with the expected scope and passing CI. This live smoke test has not
    been run as part of this change.
@@ -79,7 +87,7 @@ enabled: an authorized user should post `/fs-code` or remove and re-add the
 label. The same applies to missed events after an outage longer than 24 hours.
 
 Workflow-level concurrency serializes manual and scheduled discovery/dispatch.
-Each dispatch record launches its own **Fullsend RHAI epic execution** workflow
+Each dispatch record launches its own **Fullsend AISDLC epic execution** workflow
 run, with exactly one `code` matrix entry. This avoids the pinned action's
 shared `fullsend-code` artifact name colliding across epics. The poll job needs
 `actions: write` to launch these runs using its repository `GITHUB_TOKEN`.
@@ -103,7 +111,7 @@ dispatch or coding fails after checkpointing, inspect the run and retry with a
 fresh `/fs-code` comment. Check for an existing PR first. Rerunning the parent
 poll reads the advanced Jira checkpoints; it does not replay its saved records.
 For a failed launch while `main` is still at the polling SHA, a maintainer may
-manually run **Fullsend RHAI epic execution** on `main` with the original poll
+manually run **Fullsend AISDLC epic execution** on `main` with the original poll
 run ID, attempt, and failed record's zero-based index. Replay only failed records:
 an accepted launch can still return a network error, so check child runs before
 retrying. Parent reruns change the attempt and invalidate older artifact replays;

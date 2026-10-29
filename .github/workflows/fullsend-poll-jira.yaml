@@ -1,4 +1,4 @@
-name: Fullsend RHAI epic coding
+name: Fullsend AISDLC epic coding
 
 on:
   schedule:
@@ -9,6 +9,7 @@ permissions: {}
 
 # Serialize discovery and dispatch, including manual runs.
 concurrency:
+  # Keep the existing group to serialize across the project migration.
   group: fullsend-rhai-epic-coding
   cancel-in-progress: false
 
@@ -33,7 +34,7 @@ jobs:
           workflow_repository: fullsend-ai/fullsend
           workflow_sha: af8cd4756172ec105c3aa523515c9c7d51684e90
 
-      - name: Poll opted-in RHAI epics
+      - name: Poll opted-in AISDLC epics
         env:
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
           JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
@@ -45,8 +46,8 @@ jobs:
           fullsend poll \
             --input-driver jira-poll \
             --jira-url "${JIRA_BASE_URL}" \
-            --jira-project RHAI \
-            --jql 'project = RHAI AND issuetype = Epic AND labels = "fs-integration" AND statusCategory != Done ORDER BY updated DESC' \
+            --jira-project AISDLC \
+            --jql 'project = AISDLC AND issuetype = Epic AND labels = "fs-integration" AND statusCategory != Done ORDER BY updated DESC' \
             --target-repo opendatahub-io/mlflow-go \
             --output dispatches.json \
             --fullsend-dir .fullsend

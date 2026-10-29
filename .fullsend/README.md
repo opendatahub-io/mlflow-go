@@ -54,7 +54,7 @@ Issue opened, edited, and labeled events reach the reusable dispatcher, which
 applies its triage/coding eligibility and authorization rules. Issue comments
 support `/fs-triage` and `/fs-code`.
 
-The separate [RHAI epic-to-code workflow](jira.md) polls non-Done RHAI epics
+The separate [AISDLC epic-to-code workflow](jira.md) polls non-Done AISDLC epics
 labeled `fs-integration`. Adding the label or posting `/fs-code` triggers coding
 when the Jira actor is authorized. An epic created with the label still needs
 one of those explicit actions. Jira credentials

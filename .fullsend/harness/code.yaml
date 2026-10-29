@@ -2,13 +2,13 @@
 base: https://raw.githubusercontent.com/fullsend-ai/agents/f4acd0350dc9445112f4a0a6f781c02a31a64636/harness/code.yaml#sha256=760dbb4632fad21c667653d7ddb518647dff545e10abffa4a24acf0520ca61fa
 
 # GitHub code events retain the existing stage-based dispatcher. This trigger
-# is only for the Jira poller, whose JQL restricts candidates to RHAI epics.
+# is only for the Jira poller, whose JQL restricts candidates to AISDLC epics.
 trigger: >
   event.source.system == "jira"
     && event.repo == "opendatahub-io/mlflow-go"
     && event.entity.kind == "work_item"
-    && event.entity.key.startsWith("RHAI-")
-    && event.entity.url.startsWith("https://redhat.atlassian.net/browse/RHAI-")
+    && event.entity.key.startsWith("AISDLC-")
+    && event.entity.url.startsWith("https://redhat.atlassian.net/browse/AISDLC-")
     && event.actor.kind == "human"
     && event.actor.role in ["write", "admin"]
     && "fs-integration" in event.state.labels
@@ -28,4 +28,4 @@ env:
 overlays:
   - when: 'has(event.source) && event.source.system == "jira"'
     skills:
-      - skills/rhai-epics
+      - skills/aisdlc-epics

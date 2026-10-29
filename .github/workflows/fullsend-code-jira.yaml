@@ -1,5 +1,5 @@
-name: Fullsend RHAI epic execution
-run-name: RHAI poll ${{ inputs.poll_run_id }} record ${{ inputs.record_index }}
+name: Fullsend AISDLC epic execution
+run-name: AISDLC poll ${{ inputs.poll_run_id }} record ${{ inputs.record_index }}
 
 on:
   workflow_dispatch:

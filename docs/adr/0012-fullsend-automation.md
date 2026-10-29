@@ -131,3 +131,15 @@ retry behavior, and the required live smoke test.
 - [ODH Dashboard configuration](https://github.com/opendatahub-io/odh-dashboard/blob/main/.fullsend/config.yaml)
 - [RFE Creator configuration](https://github.com/fullsend-ai/rfe-creator/blob/main/.fullsend/config.yaml)
 - [Pinned Fullsend dispatcher](https://github.com/fullsend-ai/fullsend/blob/af8cd4756172ec105c3aa523515c9c7d51684e90/.github/workflows/reusable-dispatch.yml)
+
+## Follow-up: move Jira epic coding to AISDLC
+
+Target AISDLC instead of RHAI. The pinned Jira poller requires project-role
+lookup permissions; the integration account can administer AISDLC but cannot
+administer RHAI. Update JQL, normalized-event project and URL guards, and the
+epic skill's live validation and child query together. Keep the opt-in label,
+human authorization gates, pinned harness, and half-hour schedule unchanged.
+
+The token owner cannot trigger its own coding events: Fullsend classifies that
+account as a bot. Use a separate authorized human for label additions or
+`/fs-code` comments, including after moving an already-labeled epic.

@@ -16,8 +16,8 @@ base = {
     "entity": {
         "kind": "work_item",
         "id": 12345,
-        "key": "RHAI-123",
-        "url": "https://redhat.atlassian.net/browse/RHAI-123",
+        "key": "AISDLC-123",
+        "url": "https://redhat.atlassian.net/browse/AISDLC-123",
     },
     "transition": {
         "kind": "label_changed",
@@ -87,11 +87,24 @@ add("read_only_actor", 0, actor=base["actor"] | {"role": "read"})
 add("bot", 0, actor=base["actor"] | {"kind": "bot"})
 add("other_repo", 0, repo="other/repo")
 add("github_event", 0, source=base["source"] | {"system": "github"})
+add(
+    "previous_rhai_project",
+    0,
+    entity=base["entity"] | {
+        "key": "RHAI-123",
+        "url": "https://redhat.atlassian.net/browse/RHAI-123",
+    },
+)
+add(
+    "previous_rhai_url",
+    0,
+    entity=base["entity"] | {"url": "https://redhat.atlassian.net/browse/RHAI-123"},
+)
 add("other_project", 0, entity=base["entity"] | {"key": "OTHER-123"})
 add(
     "other_tenant",
     0,
-    entity=base["entity"] | {"url": "https://other.atlassian.net/browse/RHAI-123"},
+    entity=base["entity"] | {"url": "https://other.atlassian.net/browse/AISDLC-123"},
 )
 with tempfile.NamedTemporaryFile(mode="w+", suffix=".json") as f:
     for name, event, expected in cases:
