@@ -268,13 +268,20 @@ func cloneJSONReflectValue(value reflect.Value, seen map[jsonCloneVisit]reflect.
 
 func cloneJSONStructFields(clone, value reflect.Value, seen map[jsonCloneVisit]reflect.Value) {
 	for i := 0; i < value.NumField(); i++ {
-		if clone.Field(i).CanSet() {
+		switch {
+		case clone.Field(i).CanSet():
 			clone.Field(i).Set(cloneJSONReflectValue(value.Field(i), seen))
-		} else if value.Type().Field(i).Anonymous && value.Field(i).Kind() == reflect.Struct {
+		case value.Type().Field(i).Anonymous && value.Field(i).Kind() == reflect.Struct:
 			// An unexported value embed is not settable, but its exported fields are.
 			// Walk the independent struct copy, preserving its unexported state.
-			// Do not descend through unsettable pointers: they still alias the source.
 			cloneJSONStructFields(clone.Field(i), value.Field(i), seen)
+		case value.Type().Field(i).Anonymous && value.Field(i).Kind() == reflect.Pointer:
+			// An unexported pointer embed must be replaced before its promoted fields
+			// can be changed. Only bypass reflection's restriction on the pointer slot
+			// in our addressable struct copy, never on the source or its pointee.
+			field := clone.Field(i)
+			field = reflect.NewAt(field.Type(), field.Addr().UnsafePointer()).Elem()
+			field.Set(cloneJSONReflectValue(field, seen))
 		}
 	}
 }

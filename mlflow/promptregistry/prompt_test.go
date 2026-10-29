@@ -300,6 +300,14 @@ type testExtraParamsNestedEmbedded struct {
 	testExtraParamsEmbedded
 }
 
+type testExtraParamsPointerEmbedded struct {
+	*testExtraParamsEmbedded
+}
+
+type testExtraParamsNestedPointerEmbedded struct {
+	*testExtraParamsPointerEmbedded
+}
+
 type testExtraParamsCycle struct {
 	Stops []string
 	Self  *testExtraParamsCycle `json:"-"`
@@ -310,6 +318,10 @@ type testExtraParamsCycle struct {
 func newTestModelConfig() *PromptModelConfig {
 	temperature, topP, frequencyPenalty, presencePenalty := 0.7, 0.9, 0.1, 0.2
 	maxTokens, topK := 1024, 40
+	pointerEmbedded := testExtraParamsPointerEmbedded{&testExtraParamsEmbedded{
+		testExtraParamsObject: testExtraParamsObject{Stops: []string{"END"}, label: "original"},
+		Labels:                map[string]string{"key": "original"},
+	}}
 	cycle := &testExtraParamsCycle{
 		Stops: []string{"END"},
 		Map:   map[string]any{"value": "original"},
@@ -348,26 +360,30 @@ func newTestModelConfig() *PromptModelConfig {
 				testExtraParamsObject: testExtraParamsObject{Stops: []string{"END"}, label: "original"},
 				Labels:                map[string]string{"key": "original"},
 			}},
-			"cycle":           cycle,
-			"cycleAlias":      cycle,
-			"int":             int(42),
-			"int64":           int64(42),
-			"float32":         float32(0.5),
-			"float64":         float64(0.5),
-			"jsonNumber":      json.Number("42"),
-			"bool":            true,
-			"nil":             nil,
-			"nilMap":          map[string]any(nil),
-			"nilArray":        []any(nil),
-			"emptyMap":        map[string]any{},
-			"emptyArray":      []any{},
-			"nilTypedMap":     testExtraParamsMap(nil),
-			"nilTypedSlice":   testExtraParamsSlice(nil),
-			"emptyTypedMap":   testExtraParamsMap{},
-			"emptyTypedSlice": testExtraParamsSlice{},
-			"nilRaw":          json.RawMessage(nil),
-			"emptyBytes":      []byte{},
-			"nilPointer":      (*testExtraParamsObject)(nil),
+			"pointerEmbedded":       pointerEmbedded,
+			"nestedPointerEmbedded": testExtraParamsNestedPointerEmbedded{&pointerEmbedded},
+			"nilPointerEmbedded":    testExtraParamsPointerEmbedded{},
+			"embeddedCycle":         struct{ *testExtraParamsCycle }{cycle},
+			"cycle":                 cycle,
+			"cycleAlias":            cycle,
+			"int":                   int(42),
+			"int64":                 int64(42),
+			"float32":               float32(0.5),
+			"float64":               float64(0.5),
+			"jsonNumber":            json.Number("42"),
+			"bool":                  true,
+			"nil":                   nil,
+			"nilMap":                map[string]any(nil),
+			"nilArray":              []any(nil),
+			"emptyMap":              map[string]any{},
+			"emptyArray":            []any{},
+			"nilTypedMap":           testExtraParamsMap(nil),
+			"nilTypedSlice":         testExtraParamsSlice(nil),
+			"emptyTypedMap":         testExtraParamsMap{},
+			"emptyTypedSlice":       testExtraParamsSlice{},
+			"nilRaw":                json.RawMessage(nil),
+			"emptyBytes":            []byte{},
+			"nilPointer":            (*testExtraParamsObject)(nil),
 		},
 	}
 	cycle.Map["params"] = cfg.ExtraParams
@@ -405,6 +421,12 @@ func mutateTestModelConfig(cfg *PromptModelConfig) {
 	embedded := cfg.ExtraParams["embedded"].(testExtraParamsNestedEmbedded)
 	embedded.Stops[0] = "modified"
 	embedded.Labels["key"] = "modified"
+	pointerEmbedded := cfg.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded)
+	pointerEmbedded.Stops[0] = "modified"
+	pointerEmbedded.Labels["key"] = "modified"
+	nestedPointerEmbedded := cfg.ExtraParams["nestedPointerEmbedded"].(testExtraParamsNestedPointerEmbedded)
+	nestedPointerEmbedded.Stops = []string{"replaced"}
+	nestedPointerEmbedded.Labels = map[string]string{"key": "replaced"}
 	cycle := cfg.ExtraParams["cycle"].(*testExtraParamsCycle)
 	cycle.Self.Stops[0] = "modified"
 	cycle.Map["self"].(map[string]any)["value"] = "modified"
@@ -413,13 +435,30 @@ func mutateTestModelConfig(cfg *PromptModelConfig) {
 
 func TestPromptVersion_Clone_ExtraParamsReferences(t *testing.T) {
 	original := &PromptVersion{ModelConfig: newTestModelConfig()}
+	originalEmbedded := original.ModelConfig.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded).testExtraParamsEmbedded
+	originalStops := &originalEmbedded.Stops[0]
+	originalLabels := reflect.ValueOf(originalEmbedded.Labels).Pointer()
 	clone := original.Clone()
+	if original.ModelConfig.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded).testExtraParamsEmbedded != originalEmbedded ||
+		&originalEmbedded.Stops[0] != originalStops || reflect.ValueOf(originalEmbedded.Labels).Pointer() != originalLabels {
+		t.Error("cloning modified the original embedded pointer or its containers")
+	}
+	clonedEmbedded := clone.ModelConfig.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded).testExtraParamsEmbedded
+	if clonedEmbedded == originalEmbedded {
+		t.Error("anonymous embedded pointer was not copied")
+	}
+	if clone.ModelConfig.ExtraParams["nestedPointerEmbedded"].(testExtraParamsNestedPointerEmbedded).testExtraParamsEmbedded != clonedEmbedded {
+		t.Error("repeated references through nested pointer embeddings were not preserved")
+	}
 	cycle := clone.ModelConfig.ExtraParams["cycle"].(*testExtraParamsCycle)
 	if cycle == original.ModelConfig.ExtraParams["cycle"].(*testExtraParamsCycle) {
 		t.Fatal("cyclic pointer was not copied")
 	}
 	if cycle.Self != cycle || clone.ModelConfig.ExtraParams["cycleAlias"] != cycle {
 		t.Error("pointer cycles or repeated references were not preserved")
+	}
+	if clone.ModelConfig.ExtraParams["embeddedCycle"].(struct{ *testExtraParamsCycle }).testExtraParamsCycle != cycle {
+		t.Error("reference to a cyclic pointer through an embedding was not preserved")
 	}
 	if reflect.ValueOf(cycle.Map["self"]).Pointer() != reflect.ValueOf(cycle.Map).Pointer() {
 		t.Error("map cycle was not preserved")
