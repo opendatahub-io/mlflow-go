@@ -1,4 +1,9 @@
-"""Fan out trusted poll records and validate their provenance before execution."""
+"""Fan out trusted poll records and validate their provenance before execution.
+
+The fan-out works around https://github.com/fullsend-ai/fullsend/issues/8961
+(same-agent records in one matrix collide on the fullsend-<agent> artifact).
+Remove this script and fullsend-code-jira.yaml once that is fixed.
+"""
 
 import json
 import os

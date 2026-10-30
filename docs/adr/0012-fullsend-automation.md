@@ -143,3 +143,30 @@ human authorization gates, pinned harness, and half-hour schedule unchanged.
 The token owner cannot trigger its own coding events: Fullsend classifies that
 account as a bot. Use a separate authorized human for label additions or
 `/fs-code` comments, including after moving an already-labeled epic.
+
+## Follow-up: return Jira epic coding to RHAI
+
+Target RHAI again, using a dedicated Jira bot account instead of a personal
+token. Fullsend v0.54.0 is expected to include
+[fullsend#8892](https://github.com/fullsend-ai/fullsend/pull/8892), which removes
+the need for Administer Projects: a `jira` authorization entry in `config.yaml`
+authorizes label additions by Jira's Edit Issues permission and `/fs-code`
+comments by membership in a listed Jira group. List
+`jira-software-users-redhat` for now, because no narrower RHAI group that fits
+is known; teams that want a smaller audience can list their own group.
+
+Select epics that Epic Creator generated for AI implementation, carry
+`ready-to-code`, and name this repository in their Environment field. Use
+`ready-to-code` instead of `fs-integration` to match the GitHub convention and
+the default code harness trigger in agents v0.53 and later. Drop the local
+trigger override, which the default trigger now covers, and keep
+`harness/code.yaml` so the poller registers `code`. Rename the epic skill to
+`rhai-epics`. Keep the per-record fan-out until
+[fullsend#8961](https://github.com/fullsend-ai/fullsend/issues/8961) is fixed,
+and the half-hour schedule.
+
+Labels or comments from accounts that Fullsend classifies as bots, including
+Jira automation rules, do not start coding: the poller drops those events
+before authorization. Pins to Fullsend and agents v0.54.0 are placeholders
+until those releases exist. See the [Jira setup and operations
+guide](../../.fullsend/jira.md).
