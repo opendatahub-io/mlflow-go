@@ -1,25 +1,13 @@
 # Jira-capable code pipeline; keep its pre/post scripts and provider boundary.
-base: https://raw.githubusercontent.com/fullsend-ai/agents/f4acd0350dc9445112f4a0a6f781c02a31a64636/harness/code.yaml#sha256=760dbb4632fad21c667653d7ddb518647dff545e10abffa4a24acf0520ca61fa
+# TODO: replace v0.54.0 with its release commit SHA and set the sha256 digest
+# once agents v0.54.0 is out.
+base: https://raw.githubusercontent.com/fullsend-ai/agents/v0.54.0/harness/code.yaml#sha256=TODO
 
-# GitHub code events retain the existing stage-based dispatcher. This trigger
-# is only for the Jira poller, whose JQL restricts candidates to AISDLC epics.
-trigger: >
-  event.source.system == "jira"
-    && event.repo == "opendatahub-io/mlflow-go"
-    && event.entity.kind == "work_item"
-    && event.entity.key.startsWith("AISDLC-")
-    && event.entity.url.startsWith("https://redhat.atlassian.net/browse/AISDLC-")
-    && event.actor.kind == "human"
-    && event.actor.role in ["write", "admin"]
-    && "fs-integration" in event.state.labels
-    && (
-      (event.transition.kind == "label_changed"
-        && event.transition.label.name == "fs-integration"
-        && event.transition.label.action == "added")
-      || (event.transition.kind == "comment_added"
-        && has(event.transition.comment.command)
-        && event.transition.comment.command == "/fs-code")
-    )
+# No trigger here: the default code harness (agents v0.53 and later) dispatches
+# on a ready-to-code label being added or a /fs-code comment, for GitHub and
+# Jira. The poll's JQL limits Jira events to RHAI epics for this repository,
+# and the dispatcher authorizes the actor (fullsend#8892 for Jira). This file
+# stays so the Jira poller registers `code`.
 
 env:
   runner:
@@ -28,4 +16,4 @@ env:
 overlays:
   - when: 'has(event.source) && event.source.system == "jira"'
     skills:
-      - skills/aisdlc-epics
+      - skills/rhai-epics

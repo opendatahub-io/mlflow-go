@@ -54,12 +54,12 @@ Issue opened, edited, and labeled events reach the reusable dispatcher, which
 applies its triage/coding eligibility and authorization rules. Issue comments
 support `/fs-triage` and `/fs-code`.
 
-The separate [AISDLC epic-to-code workflow](jira.md) polls non-Done AISDLC epics
-labeled `fs-integration`. Adding the label or posting `/fs-code` triggers coding
-when the Jira actor is authorized. An epic created with the label still needs
-one of those explicit actions. Jira credentials
-and project-role setup are required before activation. The code harness is
-pinned to a Jira-capable agent revision; GitHub issue coding remains enabled.
+The separate [RHAI epic-to-code workflow](jira.md) polls non-Done RHAI epics
+that Epic Creator generated for this repository and someone labeled
+`ready-to-code`. Adding the label, or an authorized `/fs-code` comment, starts
+coding. An epic created with the label still needs one of those explicit
+actions. It needs Fullsend v0.54.0 or later and a Jira bot account; see
+[jira.md](jira.md). GitHub issue coding remains enabled.
 
 ## Validation and maintenance
 

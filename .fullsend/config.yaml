@@ -29,6 +29,15 @@ agents:
 allowed_remote_resources:
   - https://raw.githubusercontent.com/fullsend-ai/fullsend/
   - https://raw.githubusercontent.com/fullsend-ai/agents/
+# Jira authorization for the RHAI poller (needs fullsend#8892, v0.54.0 or
+# later). Any user who can edit an RHAI epic may add ready-to-code. /fs-code
+# comments are authorized for members of the listed group, checked through
+# Jira's user-groups API. jira-software-users-redhat includes every Red Hat
+# Jira user; a team that wants a narrower audience lists a smaller group.
+authorization:
+  - provider: jira
+    write:
+      groups: ["67a1a37e-d4d4-46d6-a681-294ce3241678"]  # jira-software-users-redhat
 create_issues:
   allow_targets:
     repos:
