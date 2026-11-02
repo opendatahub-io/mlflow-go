@@ -75,12 +75,6 @@ type Config struct {
 	StreamHeaderTimeout time.Duration
 }
 
-// errorResponse represents the MLflow API error format.
-type errorResponse struct {
-	ErrorCode string `json:"error_code"`
-	Message   string `json:"message"`
-}
-
 // New creates a new transport Client.
 func New(cfg Config) (*Client, error) {
 	baseURL, err := url.Parse(cfg.BaseURL)
@@ -831,18 +825,44 @@ func stripAuthOnCrossOriginRedirect(prev func(*http.Request, []*http.Request) er
 }
 
 func (c *Client) parseError(statusCode int, body []byte) error {
-	var errResp errorResponse
-	if err := json.Unmarshal(body, &errResp); err != nil {
-		// If we can't parse the error, return a generic one
-		return &errors.APIError{
-			StatusCode: statusCode,
-			Message:    string(body),
+	apiErr := &errors.APIError{StatusCode: statusCode}
+	// Gate on a JSON object, and decode fields independently: a non-string
+	// message must not discard a valid MLflow error code (or vice versa).
+	var fields struct {
+		Code    json.RawMessage `json:"error_code"`
+		Message json.RawMessage `json:"message"`
+	}
+	if json.Unmarshal(body, &fields) == nil {
+		if err := json.Unmarshal(fields.Code, &apiErr.Code); err != nil {
+			apiErr.Code = ""
+		}
+		if err := json.Unmarshal(fields.Message, &apiErr.Message); err != nil {
+			apiErr.Message = ""
 		}
 	}
-
-	return &errors.APIError{
-		StatusCode: statusCode,
-		Code:       errResp.ErrorCode,
-		Message:    errResp.Message,
+	if strings.TrimSpace(apiErr.Message) == "" {
+		apiErr.Message = http.StatusText(statusCode)
+		if apiErr.Message == "" {
+			apiErr.Message = "HTTP request failed"
+		}
+		// Proxies and providers can return arbitrary JSON, HTML, or plain text.
+		// Include only a bounded body excerpt; do not append request or response
+		// headers or client configuration. Server bodies may contain sensitive
+		// data. Quote the excerpt so it cannot inject log lines.
+		const maxErrorBodyExcerpt = 4096
+		excerpt := bytes.TrimSpace(body)
+		if len(excerpt) > 0 {
+			truncated := len(excerpt) > maxErrorBodyExcerpt
+			if truncated {
+				excerpt = excerpt[:maxErrorBodyExcerpt]
+			}
+			apiErr.Message += fmt.Sprintf(": response body %q", strings.ToValidUTF8(string(excerpt), "\uFFFD"))
+			if truncated {
+				apiErr.Message += " (truncated)"
+			}
+		} else {
+			apiErr.Message += ": empty response body"
+		}
 	}
+	return apiErr
 }

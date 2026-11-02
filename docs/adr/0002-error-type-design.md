@@ -104,7 +104,15 @@ Define `NotFoundError`, `PermissionError`, etc. as distinct types.
 
 ### Neutral
 
-- Error messages from server are passed through; SDK doesn't translate them
+- Error fields from the server are passed through without translation, for both
+  standard and custom HTTP transports. Fields are decoded independently so an
+  invalid field does not discard another valid field.
+- When no usable message exists, the SDK supplies HTTP status text and a quoted
+  response excerpt bounded to 4096 bytes (before quoting), or an empty-body
+  indication. Error details may contain sensitive server data; applications
+  should consider this before logging them.
+- `APIError.Error()` escapes control and bidirectional-control characters for
+  display without modifying the stored fields.
 
 ## References
 
