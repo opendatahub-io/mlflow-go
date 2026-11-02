@@ -3,44 +3,73 @@
 Fullsend polls Red Hat Jira every 30 minutes for this candidate set:
 
 ```jql
-project = AISDLC AND issuetype = Epic AND labels = "fs-integration"
-  AND statusCategory != Done ORDER BY updated DESC
+project = RHAI
+  AND issuetype = Epic
+  AND labels = "epic-creator-auto-created"
+  AND labels in ("epic-creator-ai-impl-high", "epic-creator-ai-impl-medium")
+  AND labels = "ready-to-code"
+  AND environment ~ "\"https://github.com/opendatahub-io/mlflow-go\""
+  AND statusCategory != Done
+ORDER BY updated DESC
 ```
 
-AISDLC replaces RHAI because the integration account needs access to Jira's
-project-role APIs, which require project administration. The initial smoke-test
-epic was moved to AISDLC. Existing RHAI epics are no longer candidates.
+These are epics that Epic Creator generated for AI implementation, that someone
+has marked ready, and whose Environment field names this repository.
+Environment is free text, so the match is a phrase match, not equality. The
+selectors are provisional until the epic tooling settles on how it marks the
+target repository and readiness.
 
 The target is `opendatahub-io/mlflow-go`. There is no fixed issue key. Epics are
 the coding work items; their children supply context, not separate dispatches.
 
+This configuration needs Fullsend v0.54.0 or later, the first expected release
+with [fullsend#8892](https://github.com/fullsend-ai/fullsend/pull/8892). Earlier
+releases resolve every Jira event through RHAI's project roles, which requires
+the Administer Projects permission for the polling account.
+
 ## Triggering implementation
 
-An AISDLC user with a project role named `Developers` or `Administrators` can:
+- **Add `ready-to-code`** to a matching epic to start coding. Anyone who can
+  edit the epic can do this: the `jira` authorization entry in `config.yaml`
+  keeps Fullsend's default `labels: jira_editors` rule, which relies on Jira's
+  Edit Issues permission.
+- **Comment `/fs-code`** on a labeled epic to retry or to request a new run,
+  optionally with instructions. The commenter must be in a group listed under
+  `write` in the `jira` authorization entry. This repository lists
+  `jira-software-users-redhat`, which includes every Red Hat Jira user. A team
+  that wants a narrower audience lists a smaller group.
 
-- Add `fs-integration` to an existing epic to start coding.
-- Comment `/fs-code` on a labeled epic to retry or request a new run.
+Because the candidate query requires `ready-to-code`, `/fs-code` on an epic
+without the label does nothing. Removing the label stops discovery but does
+not cancel a run that has already started.
 
-The label is this repository's readiness signal; `ready-to-code` is not also
-required. Creating an already-labeled epic does not start coding: post `/fs-code`
-or remove and re-add the label with an authorized account. The pinned poller
-synthesizes creation events from current labels and the reporter, which cannot
-establish who added the readiness label. Ordinary comments and other label
-changes do not trigger coding.
-The human triggering work must be different from the account owning
-`JIRA_TOKEN`: the poller classifies its own account as a bot even if it is a
-personal account. Moving an already-labeled epic is not itself a coding trigger;
-use a fresh authorized `/fs-code` comment or label addition after activation.
-The poller excludes its own service account, and the local trigger requires a
-human with `write` or `admin` authorization. Done epics and unlabeled epics are
-excluded. The agent rechecks the live epic before editing code.
+The code agent itself has no trigger in this repository: `harness/code.yaml`
+inherits the default code harness trigger (a `ready-to-code` label added, or a
+`/fs-code` comment from a human). The file exists so that the poller registers
+the `code` agent.
+
+Some actions do not start coding:
+
+- **Creating an epic that already has the label.** The poller reports a new
+  epic as an `opened` event with its current labels and the reporter, which
+  cannot show who added readiness. Post `/fs-code`, or remove and re-add the
+  label.
+- **Labels or comments from accounts Fullsend treats as bots.** The poller drops
+  these events before authorization, with no log line. That covers the account
+  that owns `JIRA_TOKEN`, accounts Jira reports as apps, and accounts whose
+  display name ends in `bot` or `automation` or starts with `Automation for`
+  (such as Jira's own automation rules). A person must add the label or post
+  the comment.
+- Ordinary comments, other label changes, and label removals.
 
 The code agent reads the epic and its direct children through the inherited
 read-only Jira provider, implements the SDK scope, runs checks, and commits
-locally. Fullsend's post-script pushes a branch and creates a GitHub PR against
-`main` with the Jira link. Human review and CI still govern merging. An epic
-that needs clarification or spans other repositories can produce an explanation
-instead of a code change; the agent must not invent a complete implementation.
+locally. Fullsend's post-script pushes a branch, creates a GitHub PR against
+`main` with the Jira link, and reports the result on the epic. Human review and
+CI still govern merging. An epic that needs clarification or spans other
+repositories can produce an explanation instead of a code change; the agent must
+not invent a complete implementation. The `rhai-epics` skill adds these rules
+and has the agent recheck the live epic before editing code.
 
 ## Activation
 
@@ -49,28 +78,23 @@ instead of a code change; the agent must not invent a complete implementation.
    repository-scoped OpenAI identity variables. The code agent remains Pi with
    `openai/gpt-6.1-sol`.
 2. Set `JIRA_TOKEN` and `JIRA_USER_EMAIL` as Actions secrets on
-   `opendatahub-io/mlflow-go`. Use a dedicated Jira service account. The workflow
-   fixes the tenant to `https://redhat.atlassian.net`; no Jira URL variable is
-   required.
-3. Confirm the account can browse the AISDLC epics, comments, and child issues,
-   including issue-security restrictions, and that the organization permits
-   API-token access. Unlike a read-only connection check, polling writes Jira
-   issue properties for locks and checkpoints. The pinned poller documents
-   Developers and Administrators project roles for its service account so it
-   can coordinate polls and inspect command authors' role membership.
-4. Confirm AISDLC's role names and membership with its administrators. The poller
-   maps `Developers` to `write` and `Administrators` to `admin`; custom role
-   names do not imply write access. This authorization uses Jira membership,
-   not membership in the GitHub repository.
-5. Obtain maintainer approval for the protected workflow changes described in
-   [implementation issue #45](https://github.com/opendatahub-io/mlflow-go/issues/45),
-   then merge to `main`. Both workflows reject manual runs on other branches and
-   fork repositories. Polling checks out the run’s exact `github.sha`.
-6. Add the label to a small, well-scoped AISDLC epic, then run **Actions → Fullsend
-   AISDLC epic coding → Run workflow**, or wait for the scheduled poll. Verify the
-   poll dispatches `code`, the sandbox reads Jira, and a linked GitHub PR is
-   created with the expected scope and passing CI. This live smoke test has not
-   been run as part of this change.
+   `opendatahub-io/mlflow-go` for a dedicated Jira bot account, not a personal
+   account. The workflow fixes the tenant to `https://redhat.atlassian.net`; no
+   Jira URL variable is required.
+3. Confirm the account has these RHAI permissions: Browse Projects, Edit Issues
+   (polling writes lock and checkpoint issue properties), Add Comments, and Edit
+   Own Comments; and the global Browse users and groups permission, which the
+   group list needs. It does not need Administer Projects.
+4. Update the `TODO` pins in the workflows and `harness/code.yaml` to the
+   v0.54.0 release commit SHAs and digest, then merge to `main` with maintainer
+   approval. Both workflows reject manual runs on other branches and fork
+   repositories. Polling checks out the run's exact `github.sha`.
+5. Add `ready-to-code` to a small, well-scoped matching RHAI epic, then run
+   **Actions, Fullsend RHAI epic coding, Run workflow**, or wait for the
+   scheduled poll. Verify the poll dispatches `code`, the sandbox reads Jira, a
+   linked GitHub PR is created with the expected scope and passing CI, and the
+   result appears on the epic. This live smoke test has not been run as part of
+   this change.
 
 Credentials stay in Actions secrets and Fullsend's credential providers. Do not
 put token values in YAML, Jira comments, workflow inputs, or PR descriptions.
@@ -87,9 +111,11 @@ enabled: an authorized user should post `/fs-code` or remove and re-add the
 label. The same applies to missed events after an outage longer than 24 hours.
 
 Workflow-level concurrency serializes manual and scheduled discovery/dispatch.
-Each dispatch record launches its own **Fullsend AISDLC epic execution** workflow
+Each dispatch record launches its own **Fullsend RHAI epic execution** workflow
 run, with exactly one `code` matrix entry. This avoids the pinned action's
-shared `fullsend-code` artifact name colliding across epics. The poll job needs
+shared `fullsend-code` artifact name colliding across epics
+([fullsend#8961](https://github.com/fullsend-ai/fullsend/issues/8961)); remove
+the fan-out once that is fixed. The poll job needs
 `actions: write` to launch these runs using its repository `GITHUB_TOKEN`.
 All records are retained for seven days in the poll's `jira-dispatches-<attempt>`
 artifact. If one launch request fails, remaining records are still attempted and
@@ -111,7 +137,7 @@ dispatch or coding fails after checkpointing, inspect the run and retry with a
 fresh `/fs-code` comment. Check for an existing PR first. Rerunning the parent
 poll reads the advanced Jira checkpoints; it does not replay its saved records.
 For a failed launch while `main` is still at the polling SHA, a maintainer may
-manually run **Fullsend AISDLC epic execution** on `main` with the original poll
+manually run **Fullsend RHAI epic execution** on `main` with the original poll
 run ID, attempt, and failed record's zero-based index. Replay only failed records:
 an accepted launch can still return a network error, so check child runs before
 retrying. Parent reruns change the attempt and invalidate older artifact replays;
@@ -127,14 +153,12 @@ API-policy failures require operator attention.
 
 ## Pins and validation
 
-The CLI installer and dispatcher retain Fullsend commit
-`af8cd4756172ec105c3aa523515c9c7d51684e90`. The code harness explicitly pins
-`fullsend-ai/agents` commit `f4acd0350dc9445112f4a0a6f781c02a31a64636` with a
-SHA-256 digest. This harness includes the Jira pre-script, read-only provider,
-and external-work-item-aware GitHub post-script. Older integration documentation
-describing the missing Jira pre/post pipeline does not describe this pinned
-agent implementation. The existing GitHub code stage also uses this code harness;
-the Jira overlay and local epic skill apply only to Jira source events.
+The CLI installer and the execution workflow's dispatcher pin Fullsend v0.54.0,
+and the code harness pins `fullsend-ai/agents` v0.54.0. Until those releases
+exist, the pins are placeholders marked `TODO`. The GitHub workflow
+(`fullsend.yaml`) keeps its own Fullsend pin, but GitHub code runs also use
+`harness/code.yaml`, so they move to the same agents release. The Jira overlay
+and the `rhai-epics` skill apply only to Jira source events.
 
 Validate configuration with `fullsend agent list --fullsend-dir .fullsend`,
 workflow syntax with `actionlint .github/workflows/fullsend*.yaml`, and
@@ -142,7 +166,8 @@ CEL routing with `fullsend dispatch --input-driver json --input-file <fixture>
 --config-dir .fullsend`. Synthetic dispatch tests establish routing, not live
 Jira connectivity, sandbox credential injection, or end-to-end PR creation.
 
-Run the routing regression cases with the pinned CLI on your path:
+Run the routing regression cases with a Fullsend CLI that includes
+fullsend#8892 on your path:
 
 ```bash
 python3 .fullsend/tests/test_jira_dispatch.py
@@ -150,13 +175,14 @@ python3 .fullsend/tests/test_jira_workflows.py
 ```
 
 Set `FULLSEND_BIN` to use an explicit binary path. The cases cover activation,
-retry, ordinary comments, label removal, authorization, and repo/project/tenant
-boundaries, plus two-epic fan-out, partial launch failure, provenance, and revision
+retry, ordinary comments, label removal, label and `/fs-code` authorization,
+plus two-epic fan-out, partial launch failure, provenance, and revision
 mismatch rejection. The CLI may fetch the pinned public harness into
 `.fullsend-cache/`; do not commit that generated cache.
 
 References:
 
 - [Reference poller](https://github.com/ralphbean/jira-code-test/blob/main/.github/workflows/fullsend-poll-jira.yaml)
-- [Pinned Jira-capable code harness](https://github.com/fullsend-ai/agents/blob/f4acd0350dc9445112f4a0a6f781c02a31a64636/harness/code.yaml)
-- [Pinned Jira poller guide and operational limits](https://github.com/fullsend-ai/fullsend/blob/af8cd4756172ec105c3aa523515c9c7d51684e90/docs/guides/user/jira-integration.md)
+- [Default code harness](https://github.com/fullsend-ai/agents/blob/main/harness/code.yaml)
+- [Fullsend Jira integration guide](https://github.com/fullsend-ai/fullsend/blob/main/docs/guides/user/jira-integration.md)
+- [fullsend#8892: Jira authorization without Administer Projects](https://github.com/fullsend-ai/fullsend/pull/8892)

@@ -16,12 +16,12 @@ base = {
     "entity": {
         "kind": "work_item",
         "id": 12345,
-        "key": "AISDLC-123",
-        "url": "https://redhat.atlassian.net/browse/AISDLC-123",
+        "key": "RHAI-123",
+        "url": "https://redhat.atlassian.net/browse/RHAI-123",
     },
     "transition": {
         "kind": "label_changed",
-        "label": {"name": "fs-integration", "action": "added"},
+        "label": {"name": "ready-to-code", "action": "added"},
     },
     "actor": {
         "id": "human-test",
@@ -29,7 +29,7 @@ base = {
         "role": "write",
         "is_entity_author": False,
     },
-    "state": {"labels": ["fs-integration"]},
+    "state": {"labels": ["ready-to-code"]},
     "source": {"system": "jira", "raw_type": "changelog", "raw_action": "updated"},
 }
 cases = []
@@ -42,10 +42,16 @@ def add(name, expected, **changes):
     cases.append((name, event, expected))
 
 
+# These cases exercise the default code harness trigger with this repository's
+# configuration, using a Fullsend CLI that includes fullsend#8892. Project,
+# tenant and repository are not checked here: the poll's --jira-project,
+# --jira-url, JQL and --target-repo fix them. Bot events never reach dispatch:
+# the poller drops them first, so a label added by automation that Fullsend
+# classifies as a bot does not start coding.
 add("label_added", 1)
 add("admin_actor", 1, actor=base["actor"] | {"role": "admin"})
-# A synthetic opened event has current labels and the authorized reporter,
-# even when another user added readiness later. It must never authorize code.
+# A synthetic opened event has current labels and the reporter, even when
+# another user added readiness later. It must never start coding.
 add("created_with_label", 0, transition={"kind": "opened"})
 add(
     "reporter_cannot_authorize_later_label",
@@ -62,6 +68,15 @@ add(
     },
 )
 add(
+    "bot_fs_code",
+    0,
+    transition={
+        "kind": "comment_added",
+        "comment": {"body": "/fs-code", "command": "/fs-code"},
+    },
+    actor=base["actor"] | {"kind": "bot"},
+)
+add(
     "ordinary_comment",
     0,
     transition={"kind": "comment_added", "comment": {"body": "hello"}},
@@ -71,7 +86,7 @@ add(
     0,
     transition={
         "kind": "label_changed",
-        "label": {"name": "fs-integration", "action": "removed"},
+        "label": {"name": "ready-to-code", "action": "removed"},
     },
 )
 add(
@@ -79,33 +94,33 @@ add(
     0,
     transition={
         "kind": "label_changed",
-        "label": {"name": "ready-to-code", "action": "added"},
+        "label": {"name": "fs-integration", "action": "added"},
     },
 )
-add("missing_opt_in", 0, state={"labels": []})
-add("read_only_actor", 0, actor=base["actor"] | {"role": "read"})
-add("bot", 0, actor=base["actor"] | {"kind": "bot"})
-add("other_repo", 0, repo="other/repo")
+# With the jira provider's default labels: jira_editors (fullsend#8892), a
+# label addition is authorized by Jira's Edit Issues permission, so the
+# actor's resolved role does not matter. /fs-code still needs write.
+add("triage_actor_adds_label", 1, actor=base["actor"] | {"role": "triage"})
+add("read_only_actor_adds_label", 1, actor=base["actor"] | {"role": "read"})
+add(
+    "read_only_fs_code",
+    0,
+    transition={
+        "kind": "comment_added",
+        "comment": {"body": "/fs-code", "command": "/fs-code"},
+    },
+    actor=base["actor"] | {"role": "read"},
+)
+add(
+    "triage_fs_code",
+    0,
+    transition={
+        "kind": "comment_added",
+        "comment": {"body": "/fs-code", "command": "/fs-code"},
+    },
+    actor=base["actor"] | {"role": "triage"},
+)
 add("github_event", 0, source=base["source"] | {"system": "github"})
-add(
-    "previous_rhai_project",
-    0,
-    entity=base["entity"] | {
-        "key": "RHAI-123",
-        "url": "https://redhat.atlassian.net/browse/RHAI-123",
-    },
-)
-add(
-    "previous_rhai_url",
-    0,
-    entity=base["entity"] | {"url": "https://redhat.atlassian.net/browse/RHAI-123"},
-)
-add("other_project", 0, entity=base["entity"] | {"key": "OTHER-123"})
-add(
-    "other_tenant",
-    0,
-    entity=base["entity"] | {"url": "https://other.atlassian.net/browse/AISDLC-123"},
-)
 with tempfile.NamedTemporaryFile(mode="w+", suffix=".json") as f:
     for name, event, expected in cases:
         f.seek(0)

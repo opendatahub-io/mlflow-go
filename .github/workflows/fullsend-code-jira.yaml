@@ -1,5 +1,5 @@
-name: Fullsend AISDLC epic execution
-run-name: AISDLC poll ${{ inputs.poll_run_id }} record ${{ inputs.record_index }}
+name: Fullsend RHAI epic execution
+run-name: RHAI poll ${{ inputs.poll_run_id }} record ${{ inputs.record_index }}
 
 on:
   workflow_dispatch:
@@ -18,6 +18,10 @@ on:
         type: string
 
 permissions: {}
+
+# Runs one dispatch record from fullsend-poll-jira.yaml. Part of the per-record
+# fan-out that works around https://github.com/fullsend-ai/fullsend/issues/8961;
+# remove this workflow once that is fixed.
 
 jobs:
   validate:
@@ -66,7 +70,8 @@ jobs:
       issues: write
       packages: read
       pull-requests: write
-    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@af8cd4756172ec105c3aa523515c9c7d51684e90
+    # TODO: replace v0.54.0 with its release commit SHA once it is out.
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@v0.54.0
     with:
       matrix: ${{ needs.validate.outputs.matrix }}
       mint_url: ${{ vars.FULLSEND_MINT_URL }}
