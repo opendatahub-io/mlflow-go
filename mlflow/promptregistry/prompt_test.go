@@ -1,6 +1,8 @@
 package promptregistry
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -219,5 +221,292 @@ func TestPromptVersion_Clone_NilModelConfig(t *testing.T) {
 
 	if clone.ModelConfig != nil {
 		t.Error("nil ModelConfig should remain nil after clone")
+	}
+}
+
+func TestPromptVersion_ModelConfigIsolation(t *testing.T) {
+	transforms := []struct {
+		name  string
+		apply func(*PromptVersion) (*PromptVersion, error)
+	}{
+		{"Clone", func(v *PromptVersion) (*PromptVersion, error) { return v.Clone(), nil }},
+		{"WithTemplate", func(v *PromptVersion) (*PromptVersion, error) { return v.WithTemplate("new"), nil }},
+		{"WithTag", func(v *PromptVersion) (*PromptVersion, error) { return v.WithTag("key", "value"), nil }},
+		{"WithCommitMessage", func(v *PromptVersion) (*PromptVersion, error) { return v.WithCommitMessage("new"), nil }},
+		{"FormatText", func(v *PromptVersion) (*PromptVersion, error) {
+			return v.Format(map[string]string{"name": "Alice"})
+		}},
+		{"FormatChat", func(v *PromptVersion) (*PromptVersion, error) {
+			v.Messages = []ChatMessage{{Role: "user", Content: "Hello, {{name}}!"}}
+			return v.Format(map[string]string{"name": "Alice"})
+		}},
+	}
+
+	for _, transform := range transforms {
+		t.Run(transform.name, func(t *testing.T) {
+			for _, mutateOriginal := range []bool{false, true} {
+				name := "mutate-clone"
+				if mutateOriginal {
+					name = "mutate-original"
+				}
+				t.Run(name, func(t *testing.T) {
+					original := &PromptVersion{
+						Template:    "Hello, {{name}}!",
+						ModelConfig: newTestModelConfig(),
+					}
+					if _, err := json.Marshal(original.ModelConfig); err != nil {
+						t.Fatalf("test configuration is not JSON-serializable: %v", err)
+					}
+					clone, err := transform.apply(original)
+					if err != nil {
+						t.Fatalf("%s() error = %v", transform.name, err)
+					}
+					if !reflect.DeepEqual(clone.ModelConfig, original.ModelConfig) {
+						t.Fatal("model configuration values or types changed during copy")
+					}
+
+					source, target := clone.ModelConfig, original.ModelConfig
+					if mutateOriginal {
+						source, target = target, source
+					}
+					mutateTestModelConfig(source)
+					if !reflect.DeepEqual(target, newTestModelConfig()) {
+						t.Errorf("mutating one prompt changed the other's model configuration: %+v", target)
+					}
+				})
+			}
+		})
+	}
+}
+
+type testExtraParamsMap map[string][]string
+
+type testExtraParamsSlice []map[string]string
+
+type testExtraParamsPointer *testExtraParamsObject
+
+type testExtraParamsObject struct {
+	Stops []string
+	// Unexported fields must be preserved without reflection panics.
+	label string
+}
+
+type testExtraParamsEmbedded struct {
+	testExtraParamsObject
+	Labels map[string]string
+}
+
+type testExtraParamsNestedEmbedded struct {
+	testExtraParamsEmbedded
+}
+
+type testExtraParamsPointerEmbedded struct {
+	*testExtraParamsEmbedded
+}
+
+type testExtraParamsNestedPointerEmbedded struct {
+	*testExtraParamsPointerEmbedded
+}
+
+type testExtraParamsCycle struct {
+	Stops []string
+	Self  *testExtraParamsCycle `json:"-"`
+	Map   map[string]any        `json:"-"`
+	Slice []any                 `json:"-"`
+}
+
+func newTestModelConfig() *PromptModelConfig {
+	temperature, topP, frequencyPenalty, presencePenalty := 0.7, 0.9, 0.1, 0.2
+	maxTokens, topK := 1024, 40
+	pointerEmbedded := testExtraParamsPointerEmbedded{&testExtraParamsEmbedded{
+		testExtraParamsObject: testExtraParamsObject{Stops: []string{"END"}, label: "original"},
+		Labels:                map[string]string{"key": "original"},
+	}}
+	cycle := &testExtraParamsCycle{
+		Stops: []string{"END"},
+		Map:   map[string]any{"value": "original"},
+		Slice: make([]any, 2),
+	}
+	cycle.Self = cycle
+	cycle.Map["self"] = cycle.Map
+	cycle.Slice[0], cycle.Slice[1] = cycle.Slice, "original"
+	cfg := &PromptModelConfig{
+		Provider:         "openai",
+		ModelName:        "test-model",
+		Temperature:      &temperature,
+		MaxTokens:        &maxTokens,
+		TopP:             &topP,
+		TopK:             &topK,
+		FrequencyPenalty: &frequencyPenalty,
+		PresencePenalty:  &presencePenalty,
+		StopSequences:    []string{"stop"},
+		ExtraParams: map[string]any{
+			"object": map[string]any{
+				"value":  "original",
+				"object": map[string]any{"value": "original"},
+				"array":  []any{"original", map[string]any{"value": "original"}, []any{"original"}},
+			},
+			"array":        []any{map[string]any{"value": "original"}, []any{"original"}},
+			"stop":         []string{"END"},
+			"labels":       map[string]string{"key": "original"},
+			"raw":          json.RawMessage(`{"value":"original"}`),
+			"typedMap":     testExtraParamsMap{"stop": {"END"}},
+			"typedSlice":   testExtraParamsSlice{{"key": "original"}},
+			"nestedTyped":  []any{map[string][]map[string][]string{"values": {{"stop": {"END"}}}}},
+			"fixedArray":   [1]map[string]string{{"key": "original"}},
+			"options":      &testExtraParamsObject{Stops: []string{"END"}, label: "original"},
+			"namedPointer": testExtraParamsPointer(&testExtraParamsObject{Stops: []string{"END"}, label: "original"}),
+			"embedded": testExtraParamsNestedEmbedded{testExtraParamsEmbedded{
+				testExtraParamsObject: testExtraParamsObject{Stops: []string{"END"}, label: "original"},
+				Labels:                map[string]string{"key": "original"},
+			}},
+			"pointerEmbedded":       pointerEmbedded,
+			"nestedPointerEmbedded": testExtraParamsNestedPointerEmbedded{&pointerEmbedded},
+			"nilPointerEmbedded":    testExtraParamsPointerEmbedded{},
+			"embeddedCycle":         struct{ *testExtraParamsCycle }{cycle},
+			"cycle":                 cycle,
+			"cycleAlias":            cycle,
+			"int":                   int(42),
+			"int64":                 int64(42),
+			"float32":               float32(0.5),
+			"float64":               float64(0.5),
+			"jsonNumber":            json.Number("42"),
+			"bool":                  true,
+			"nil":                   nil,
+			"nilMap":                map[string]any(nil),
+			"nilArray":              []any(nil),
+			"emptyMap":              map[string]any{},
+			"emptyArray":            []any{},
+			"nilTypedMap":           testExtraParamsMap(nil),
+			"nilTypedSlice":         testExtraParamsSlice(nil),
+			"emptyTypedMap":         testExtraParamsMap{},
+			"emptyTypedSlice":       testExtraParamsSlice{},
+			"nilRaw":                json.RawMessage(nil),
+			"emptyBytes":            []byte{},
+			"nilPointer":            (*testExtraParamsObject)(nil),
+		},
+	}
+	cycle.Map["params"] = cfg.ExtraParams
+	return cfg
+}
+
+func mutateTestModelConfig(cfg *PromptModelConfig) {
+	*cfg.Temperature = 0
+	*cfg.MaxTokens = 0
+	*cfg.TopP = 0
+	*cfg.TopK = 0
+	*cfg.FrequencyPenalty = 0
+	*cfg.PresencePenalty = 0
+	cfg.StopSequences[0] = "modified"
+	cfg.ExtraParams["int"] = 0
+	object := cfg.ExtraParams["object"].(map[string]any)
+	object["value"] = "modified"
+	object["object"].(map[string]any)["value"] = "modified"
+	array := object["array"].([]any)
+	array[0] = "modified"
+	array[1].(map[string]any)["value"] = "modified"
+	array[2].([]any)[0] = "modified"
+	array = cfg.ExtraParams["array"].([]any)
+	array[0].(map[string]any)["value"] = "modified"
+	array[1].([]any)[0] = "modified"
+	cfg.ExtraParams["stop"].([]string)[0] = "modified"
+	cfg.ExtraParams["labels"].(map[string]string)["key"] = "modified"
+	cfg.ExtraParams["raw"].(json.RawMessage)[0] = '['
+	cfg.ExtraParams["typedMap"].(testExtraParamsMap)["stop"][0] = "modified"
+	cfg.ExtraParams["typedSlice"].(testExtraParamsSlice)[0]["key"] = "modified"
+	cfg.ExtraParams["nestedTyped"].([]any)[0].(map[string][]map[string][]string)["values"][0]["stop"][0] = "modified"
+	cfg.ExtraParams["fixedArray"].([1]map[string]string)[0]["key"] = "modified"
+	cfg.ExtraParams["options"].(*testExtraParamsObject).Stops[0] = "modified"
+	cfg.ExtraParams["namedPointer"].(testExtraParamsPointer).Stops[0] = "modified"
+	embedded := cfg.ExtraParams["embedded"].(testExtraParamsNestedEmbedded)
+	embedded.Stops[0] = "modified"
+	embedded.Labels["key"] = "modified"
+	pointerEmbedded := cfg.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded)
+	pointerEmbedded.Stops[0] = "modified"
+	pointerEmbedded.Labels["key"] = "modified"
+	nestedPointerEmbedded := cfg.ExtraParams["nestedPointerEmbedded"].(testExtraParamsNestedPointerEmbedded)
+	nestedPointerEmbedded.Stops = []string{"replaced"}
+	nestedPointerEmbedded.Labels = map[string]string{"key": "replaced"}
+	cycle := cfg.ExtraParams["cycle"].(*testExtraParamsCycle)
+	cycle.Self.Stops[0] = "modified"
+	cycle.Map["self"].(map[string]any)["value"] = "modified"
+	cycle.Slice[0].([]any)[1] = "modified"
+}
+
+func TestPromptVersion_Clone_ExtraParamsReferences(t *testing.T) {
+	original := &PromptVersion{ModelConfig: newTestModelConfig()}
+	originalEmbedded := original.ModelConfig.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded).testExtraParamsEmbedded
+	originalStops := &originalEmbedded.Stops[0]
+	originalLabels := reflect.ValueOf(originalEmbedded.Labels).Pointer()
+	clone := original.Clone()
+	if original.ModelConfig.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded).testExtraParamsEmbedded != originalEmbedded ||
+		&originalEmbedded.Stops[0] != originalStops || reflect.ValueOf(originalEmbedded.Labels).Pointer() != originalLabels {
+		t.Error("cloning modified the original embedded pointer or its containers")
+	}
+	clonedEmbedded := clone.ModelConfig.ExtraParams["pointerEmbedded"].(testExtraParamsPointerEmbedded).testExtraParamsEmbedded
+	if clonedEmbedded == originalEmbedded {
+		t.Error("anonymous embedded pointer was not copied")
+	}
+	if clone.ModelConfig.ExtraParams["nestedPointerEmbedded"].(testExtraParamsNestedPointerEmbedded).testExtraParamsEmbedded != clonedEmbedded {
+		t.Error("repeated references through nested pointer embeddings were not preserved")
+	}
+	cycle := clone.ModelConfig.ExtraParams["cycle"].(*testExtraParamsCycle)
+	if cycle == original.ModelConfig.ExtraParams["cycle"].(*testExtraParamsCycle) {
+		t.Fatal("cyclic pointer was not copied")
+	}
+	if cycle.Self != cycle || clone.ModelConfig.ExtraParams["cycleAlias"] != cycle {
+		t.Error("pointer cycles or repeated references were not preserved")
+	}
+	if clone.ModelConfig.ExtraParams["embeddedCycle"].(struct{ *testExtraParamsCycle }).testExtraParamsCycle != cycle {
+		t.Error("reference to a cyclic pointer through an embedding was not preserved")
+	}
+	if reflect.ValueOf(cycle.Map["self"]).Pointer() != reflect.ValueOf(cycle.Map).Pointer() {
+		t.Error("map cycle was not preserved")
+	}
+	if reflect.ValueOf(cycle.Map["params"]).Pointer() != reflect.ValueOf(clone.ModelConfig.ExtraParams).Pointer() {
+		t.Error("reference to the ExtraParams map was not preserved")
+	}
+	if &cycle.Slice[0].([]any)[0] != &cycle.Slice[0] {
+		t.Error("slice cycle was not preserved")
+	}
+}
+
+func TestPromptVersion_Clone_NilAndEmptyModelConfigFields(t *testing.T) {
+	for _, cfg := range []*PromptModelConfig{
+		{},
+		{StopSequences: []string{}, ExtraParams: map[string]any{}},
+	} {
+		original := &PromptVersion{ModelConfig: cfg}
+		clone := original.Clone()
+		if !reflect.DeepEqual(clone.ModelConfig, original.ModelConfig) {
+			t.Errorf("nil or empty model configuration fields changed: got %+v, want %+v", clone.ModelConfig, cfg)
+		}
+	}
+}
+
+func TestPromptVersion_Clone_CollectionsIsolation(t *testing.T) {
+	newPrompt := func() *PromptVersion {
+		return &PromptVersion{
+			Messages: []ChatMessage{{Role: "user", Content: "Hello"}},
+			Aliases:  []string{"production"},
+			Tags:     map[string]string{"team": "ml"},
+		}
+	}
+	for _, mutateOriginal := range []bool{false, true} {
+		original := newPrompt()
+		clone := original.Clone()
+		if !reflect.DeepEqual(clone, original) {
+			t.Fatal("collection values changed during copy")
+		}
+		source, target := clone, original
+		if mutateOriginal {
+			source, target = target, source
+		}
+		source.Messages[0].Content = "modified"
+		source.Aliases[0] = "modified"
+		source.Tags["team"] = "modified"
+		if !reflect.DeepEqual(target, newPrompt()) {
+			t.Errorf("mutating one prompt changed the other's collections: %+v", target)
+		}
 	}
 }
